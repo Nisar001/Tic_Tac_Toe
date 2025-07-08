@@ -1,0 +1,14 @@
+export { register } from './register.controller';
+export { login } from './login.controller';
+export { verifyEmail } from './verifyEmail.controller';
+export { resendVerification } from './resendVerification.controller';
+export { requestPasswordReset } from './requestPasswordReset.controller';
+export { resetPassword } from './resetPassword.controller';
+export { refreshToken } from './refreshToken.controller';
+export { logout } from './logout.controller';
+export { logoutAll } from './logoutAll.controller';
+export { getProfile } from './getProfile.controller';
+export { updateProfile } from './updateProfile.controller';
+export { changePassword } from './changePassword.controller';
+export { deleteAccount } from './deleteAccount.controller';
+export * from './social';
