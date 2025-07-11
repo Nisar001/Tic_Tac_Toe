@@ -1,147 +1,190 @@
-import { Server as SocketIOServer, Socket } from 'socket.io';
+import { Socket } from 'socket.io';
 import { AuthUtils } from '../utils/auth.utils';
-import { EnergyManager } from '../utils/energy.utils';
+import { logError, logInfo, logWarn } from '../utils/logger';
 
 export interface AuthenticatedSocket extends Socket {
-  user?: any;
+  mockSocket: { id: string; };
+  user?: { id: string; email: string; username?: string };
   isAuthenticated?: boolean;
+  lastActivity?: Date;
+  isRateLimited?: boolean;
+}
+
+export interface SocketAuthResult {
+  success: boolean;
+  error?: string;
+  user?: any;
 }
 
 export class SocketAuthManager {
   private authenticatedSockets: Map<string, AuthenticatedSocket> = new Map();
+  private authAttempts: Map<string, { count: number; lastAttempt: Date }> = new Map();
+  private ipAttempts: Map<string, { count: number; lastAttempt: Date }> = new Map();
+
+  // Limits
+  private static readonly MAX_AUTH_ATTEMPTS_PER_IP = 10;
+  private static readonly MAX_AUTH_ATTEMPTS_PER_SOCKET = 5;
+  private static readonly AUTH_ATTEMPT_WINDOW = 15 * 60 * 1000; // 15 min
 
   /**
-   * Authenticate socket connection
+   * Validate token input
    */
-  async authenticateSocket(socket: AuthenticatedSocket, token: string): Promise<boolean> {
-    try {
-      if (!token) {
-        socket.emit('auth_error', { message: 'Token required' });
-        return false;
-      }
+  private validateAuthInput(token: string, socket: Socket): { isValid: boolean; error?: string } {
+    if (!token || typeof token !== 'string') return { isValid: false, error: 'Token must be a string' };
+    if (token.length > 2000) return { isValid: false, error: 'Token too long' };
+    if (/javascript:|<script>/i.test(token)) {
+      logWarn(`⚠️ Suspicious token from socket ${socket.id}`);
+      return { isValid: false, error: 'Invalid token format' };
+    }
+    return { isValid: true };
+  }
 
-      // Verify token
+  /**
+   * Check auth rate limiting
+   */
+  private checkRateLimit(socket: AuthenticatedSocket): { allowed: boolean; reason?: string } {
+    const now = new Date();
+    const socketId = socket.id;
+    const clientIp = socket.handshake.address || 'unknown';
+
+    const socketAttempts = this.authAttempts.get(socketId);
+    if (socketAttempts && now.getTime() - socketAttempts.lastAttempt.getTime() < SocketAuthManager.AUTH_ATTEMPT_WINDOW &&
+      socketAttempts.count >= SocketAuthManager.MAX_AUTH_ATTEMPTS_PER_SOCKET) {
+      return { allowed: false, reason: 'Too many attempts from this socket' };
+    }
+
+    const ipAttempts = this.ipAttempts.get(clientIp);
+    if (ipAttempts && now.getTime() - ipAttempts.lastAttempt.getTime() < SocketAuthManager.AUTH_ATTEMPT_WINDOW &&
+      ipAttempts.count >= SocketAuthManager.MAX_AUTH_ATTEMPTS_PER_IP) {
+      return { allowed: false, reason: 'Too many attempts from this IP' };
+    }
+
+    return { allowed: true };
+  }
+
+  /**
+   * Record auth attempt
+   */
+  private recordAuthAttempt(socket: AuthenticatedSocket, success: boolean): void {
+    const now = new Date();
+    const socketId = socket.id;
+    const clientIp = socket.handshake.address || 'unknown';
+
+    const socketRecord = this.authAttempts.get(socketId) || { count: 0, lastAttempt: now };
+    socketRecord.count = now.getTime() - socketRecord.lastAttempt.getTime() > SocketAuthManager.AUTH_ATTEMPT_WINDOW ? 1 : socketRecord.count + 1;
+    socketRecord.lastAttempt = now;
+    this.authAttempts.set(socketId, socketRecord);
+
+    if (!success) {
+      const ipRecord = this.ipAttempts.get(clientIp) || { count: 0, lastAttempt: now };
+      ipRecord.count = now.getTime() - ipRecord.lastAttempt.getTime() > SocketAuthManager.AUTH_ATTEMPT_WINDOW ? 1 : ipRecord.count + 1;
+      ipRecord.lastAttempt = now;
+      this.ipAttempts.set(clientIp, ipRecord);
+    }
+  }
+
+  /**
+   * Authenticate socket
+   */
+  async authenticateSocket(socket: AuthenticatedSocket, token: string): Promise<SocketAuthResult> {
+    const rateLimit = this.checkRateLimit(socket);
+    if (!rateLimit.allowed) {
+      this.recordAuthAttempt(socket, false);
+      socket.isRateLimited = true;
+      socket.emit('auth_error', { message: rateLimit.reason });
+      return { success: false, error: rateLimit.reason };
+    }
+
+    const inputValid = this.validateAuthInput(token, socket);
+    if (!inputValid.isValid) {
+      this.recordAuthAttempt(socket, false);
+      socket.emit('auth_error', { message: inputValid.error });
+      return { success: false, error: inputValid.error };
+    }
+
+    try {
       const decoded = AuthUtils.verifyToken(token, 'access');
-      
-      // Get user from database (temporary user object for now)
+      if (!decoded?.userId) throw new Error('Invalid token');
+
       const user = {
         id: decoded.userId,
         email: decoded.email,
-        // Additional user data would be fetched from database
+        username: (decoded as any).username || 'Unknown'
       };
 
-      if (!user) {
-        socket.emit('auth_error', { message: 'User not found' });
-        return false;
+      const existing = this.getSocketByUserId(user.id);
+      if (existing && existing.id !== socket.id) {
+        existing.emit('auth_error', { message: 'Logged in elsewhere' });
+        existing.disconnect(true);
+        this.removeSocket(existing.id);
       }
 
-      // Store authenticated user in socket
       socket.user = user;
       socket.isAuthenticated = true;
+      socket.lastActivity = new Date();
+      socket.isRateLimited = false;
 
-      // Add to authenticated sockets map
       this.authenticatedSockets.set(socket.id, socket);
+      this.recordAuthAttempt(socket, true);
 
-      socket.emit('auth_success', { 
-        message: 'Authentication successful',
-        user: {
-          id: user.id,
-          email: user.email
-        }
-      });
-
-      console.log(`🔐 Socket ${socket.id} authenticated for user ${user.id}`);
-      return true;
-
+      socket.emit('auth_success', { message: 'Authenticated', user });
+      logInfo(`✅ Socket ${socket.id} authenticated user ${user.id}`);
+      return { success: true, user };
     } catch (error) {
-      console.error('Socket authentication error:', error);
-      socket.emit('auth_error', { message: 'Invalid token' });
-      return false;
+      const msg = error instanceof Error ? error.message : 'Unknown error';
+      this.recordAuthAttempt(socket, false);
+      socket.emit('auth_error', { message: 'Authentication failed' });
+      logError(`❌ Auth error on socket ${socket.id}: ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
-  /**
-   * Check if socket is authenticated
-   */
   isSocketAuthenticated(socket: AuthenticatedSocket): boolean {
-    return socket.isAuthenticated === true && socket.user != null;
+    return !!socket.isAuthenticated && !!socket.user;
   }
 
-  /**
-   * Get authenticated socket by user ID
-   */
   getSocketByUserId(userId: string): AuthenticatedSocket | undefined {
-    for (const [socketId, socket] of this.authenticatedSockets) {
-      if (socket.user?.id === userId) {
-        return socket;
-      }
-    }
-    return undefined;
+    return Array.from(this.authenticatedSockets.values()).find(s => s.user?.id === userId);
   }
 
-  /**
-   * Get all authenticated sockets
-   */
   getAuthenticatedSockets(): AuthenticatedSocket[] {
-    return Array.from(this.authenticatedSockets.values());
+    return [...this.authenticatedSockets.values()];
   }
 
-  /**
-   * Remove socket from authenticated list
-   */
   removeSocket(socketId: string): void {
     this.authenticatedSockets.delete(socketId);
   }
 
-  /**
-   * Middleware to require authentication
-   */
-  requireAuth = (handler: (socket: AuthenticatedSocket, ...args: any[]) => void) => {
+  requireAuth(handler: (socket: AuthenticatedSocket, ...args: any[]) => void) {
     return (socket: AuthenticatedSocket, ...args: any[]) => {
       if (!this.isSocketAuthenticated(socket)) {
-        socket.emit('auth_required', { message: 'Authentication required for this action' });
+        socket.emit('auth_required', { message: 'Authentication required' });
         return;
       }
       handler(socket, ...args);
     };
-  };
+  }
 
-  /**
-   * Broadcast to all authenticated sockets
-   */
   broadcastToAuthenticated(event: string, data: any): void {
-    this.authenticatedSockets.forEach(socket => {
-      socket.emit(event, data);
-    });
+    this.authenticatedSockets.forEach(socket => socket.emit(event, data));
   }
 
-  /**
-   * Broadcast to specific users
-   */
   broadcastToUsers(userIds: string[], event: string, data: any): void {
-    userIds.forEach(userId => {
-      const socket = this.getSocketByUserId(userId);
-      if (socket) {
-        socket.emit(event, data);
-      }
-    });
+    for (const id of userIds) {
+      const socket = this.getSocketByUserId(id);
+      if (socket) socket.emit(event, data);
+    }
   }
 
-  /**
-   * Get online users count
-   */
   getOnlineUsersCount(): number {
     return this.authenticatedSockets.size;
   }
 
-  /**
-   * Get online users list
-   */
   getOnlineUsers(): Array<{ id: string; email: string; socketId: string }> {
-    return Array.from(this.authenticatedSockets.values()).map(socket => ({
-      id: socket.user.id,
-      email: socket.user.email,
-      socketId: socket.id
+    return Array.from(this.authenticatedSockets.values()).map(s => ({
+      id: s.user!.id,
+      email: s.user!.email,
+      socketId: s.id
     }));
   }
 }

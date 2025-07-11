@@ -16,19 +16,28 @@ export class MatchmakingSocket {
    * Handle find match request
    */
   handleFindMatch(socket: AuthenticatedSocket, data: any) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
+    if (!this.authManager.isSocketAuthenticated(socket) || !socket.user) {
       socket.emit('auth_required', { message: 'Authentication required for this action' });
       return;
     }
 
     try {
-      console.log(`🔍 Find match request from ${socket.user.id}:`, data);
+      const userId = socket.user?.id;
+      if (!userId) {
+        socket.emit('match_error', { message: 'User ID missing from socket.' });
+        return;
+      }
+      console.log(`🔍 Find match request from ${userId}:`, data);
 
-      // Check user energy
+      // Use fallback values for missing user properties
+      const energy = (socket.user as any).energy ?? 5;
+      const lastEnergyUpdate = (socket.user as any).lastEnergyUpdate ?? new Date();
+      const lastEnergyRegenTime = (socket.user as any).lastEnergyRegenTime ?? new Date();
+
       const energyStatus = EnergyManager.calculateCurrentEnergy(
-        socket.user.energy || 5,
-        socket.user.lastEnergyUpdate || new Date(),
-        socket.user.lastEnergyRegenTime
+        energy,
+        lastEnergyUpdate,
+        lastEnergyRegenTime
       );
 
       if (!energyStatus.canPlay) {
@@ -40,19 +49,20 @@ export class MatchmakingSocket {
       }
 
       // Check if already in queue
-      if (MatchmakingManager.isPlayerInQueue(socket.user.id)) {
+      if (MatchmakingManager.isPlayerInQueue(userId)) {
         socket.emit('match_error', {
           message: 'Already in matchmaking queue'
         });
         return;
       }
 
-      // Create player object
+      // Create player object with safe defaults
+      const { Types } = require('mongoose');
       const player: Player = {
-        userId: socket.user.id,
+        userId: Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId,
         username: socket.user.username || 'Player',
-        level: socket.user.level || 1,
-        rating: socket.user.rating,
+        level: (socket.user as any).level ?? 1,
+        rating: (socket.user as any).rating ?? 1000,
         socketId: socket.id,
         joinedAt: new Date()
       };
@@ -61,13 +71,13 @@ export class MatchmakingSocket {
       MatchmakingManager.addToQueue(player);
 
       // Try to find immediate match
-      const match = MatchmakingManager.findMatch(socket.user.id);
+      const match = MatchmakingManager.findMatch(player.userId.toString());
 
       if (match) {
         this.handleMatchFound(match);
       } else {
         // Send queue status
-        const queuePosition = MatchmakingManager.getQueuePosition(socket.user.id);
+        const queuePosition = MatchmakingManager.getQueuePosition(player.userId.toString());
         const estimatedWaitTime = MatchmakingManager.getEstimatedWaitTime(player);
 
         socket.emit('matchmaking_queued', {
@@ -77,7 +87,7 @@ export class MatchmakingSocket {
         });
 
         // Set up periodic match checking
-        this.setupPeriodicMatchChecking(socket.user.id);
+        this.setupPeriodicMatchChecking(player.userId.toString());
       }
 
     } catch (error) {
@@ -92,19 +102,24 @@ export class MatchmakingSocket {
    * Handle cancel matchmaking
    */
   handleCancelMatchmaking(socket: AuthenticatedSocket) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
+    if (!this.authManager.isSocketAuthenticated(socket) || !socket.user) {
       socket.emit('auth_required', { message: 'Authentication required for this action' });
       return;
     }
 
     try {
-      const removed = MatchmakingManager.removeFromQueue(socket.user.id);
+      const userId = socket.user?.id;
+      if (!userId) {
+        socket.emit('match_error', { message: 'User ID missing from socket.' });
+        return;
+      }
+      const removed = MatchmakingManager.removeFromQueue(userId);
       
       if (removed) {
         socket.emit('matchmaking_cancelled', {
           message: 'Matchmaking cancelled successfully'
         });
-        console.log(`❌ Matchmaking cancelled for user ${socket.user.id}`);
+        console.log(`❌ Matchmaking cancelled for user ${userId}`);
       } else {
         socket.emit('match_error', {
           message: 'Not in matchmaking queue'
@@ -123,18 +138,23 @@ export class MatchmakingSocket {
    * Get matchmaking status
    */
   handleGetMatchmakingStatus(socket: AuthenticatedSocket) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
+    if (!this.authManager.isSocketAuthenticated(socket) || !socket.user) {
       socket.emit('auth_required', { message: 'Authentication required for this action' });
       return;
     }
 
     try {
-      const isInQueue = MatchmakingManager.isPlayerInQueue(socket.user.id);
+      const userId = socket.user?.id;
+      if (!userId) {
+        socket.emit('match_error', { message: 'User ID missing from socket.' });
+        return;
+      }
+      const isInQueue = MatchmakingManager.isPlayerInQueue(userId);
       const queueStats = MatchmakingManager.getQueueStats();
 
       if (isInQueue) {
-        const player = MatchmakingManager.getPlayerFromQueue(socket.user.id);
-        const queuePosition = MatchmakingManager.getQueuePosition(socket.user.id);
+        const player = MatchmakingManager.getPlayerFromQueue(userId);
+        const queuePosition = MatchmakingManager.getQueuePosition(userId);
         const estimatedWaitTime = player ? MatchmakingManager.getEstimatedWaitTime(player) : 0;
 
         socket.emit('matchmaking_status', {

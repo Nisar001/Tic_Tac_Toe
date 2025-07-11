@@ -1,4 +1,5 @@
 import { Types } from 'mongoose';
+import { logError, logDebug } from './logger';
 
 export interface Player {
   userId: Types.ObjectId;
@@ -22,6 +23,12 @@ export interface MatchResult {
   matchQuality: number; // 0-1, higher is better match
 }
 
+export interface PlayerValidationResult {
+  isValid: boolean;
+  errors: string[];
+  sanitizedPlayer?: Player;
+}
+
 export class MatchmakingManager {
   private static queue: Map<string, Player> = new Map();
   private static readonly DEFAULT_OPTIONS: MatchmakingOptions = {
@@ -30,14 +37,153 @@ export class MatchmakingManager {
     preferSimilarLevel: true
   };
 
+  // Rate limiting for matchmaking abuse
+  private static playerActionHistory: Map<string, Date[]> = new Map();
+  private static readonly MAX_ACTIONS_PER_MINUTE = 10;
+
   /**
-   * Add player to matchmaking queue
+   * Validate player data with comprehensive checks
    */
-  static addToQueue(player: Player): void {
-    this.queue.set(player.userId.toString(), {
-      ...player,
-      joinedAt: new Date()
-    });
+  private static validatePlayer(player: any): PlayerValidationResult {
+    const errors: string[] = [];
+
+    if (!player || typeof player !== 'object') {
+      errors.push('Player must be a valid object');
+      return { isValid: false, errors };
+    }
+
+    // Validate userId
+    if (!player.userId || !Types.ObjectId.isValid(player.userId)) {
+      errors.push('Player must have a valid userId');
+    }
+
+    // Validate username
+    if (!player.username || typeof player.username !== 'string') {
+      errors.push('Player must have a valid username');
+    } else if (player.username.length < 3 || player.username.length > 20) {
+      errors.push('Username must be between 3 and 20 characters');
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(player.username)) {
+      errors.push('Username contains invalid characters');
+    }
+
+    // Validate level
+    if (typeof player.level !== 'number' || !Number.isInteger(player.level)) {
+      errors.push('Player level must be a valid integer');
+    } else if (player.level < 1 || player.level > 100) {
+      errors.push('Player level must be between 1 and 100');
+    }
+
+    // Validate rating if provided
+    if (player.rating !== undefined) {
+      if (typeof player.rating !== 'number' || player.rating < 0 || player.rating > 3000) {
+        errors.push('Player rating must be a number between 0 and 3000');
+      }
+    }
+
+    // Validate socketId
+    if (!player.socketId || typeof player.socketId !== 'string') {
+      errors.push('Player must have a valid socketId');
+    }
+
+    // Validate joinedAt
+    if (player.joinedAt && !(player.joinedAt instanceof Date)) {
+      errors.push('joinedAt must be a valid Date');
+    }
+
+    const sanitizedPlayer: Player = {
+      userId: player.userId,
+      username: player.username?.trim(),
+      level: Math.max(1, Math.min(100, Math.floor(player.level || 1))),
+      rating: player.rating ? Math.max(0, Math.min(3000, player.rating)) : undefined,
+      socketId: player.socketId?.trim(),
+      joinedAt: player.joinedAt instanceof Date ? player.joinedAt : new Date()
+    };
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      sanitizedPlayer: errors.length === 0 ? sanitizedPlayer : undefined
+    };
+  }
+
+  /**
+   * Check rate limiting for player actions
+   */
+  private static isRateLimited(userId: string): boolean {
+    try {
+      const now = new Date();
+      const userActions = this.playerActionHistory.get(userId) || [];
+      
+      // Remove actions older than 1 minute
+      const recentActions = userActions.filter(
+        action => now.getTime() - action.getTime() < 60000
+      );
+
+      if (recentActions.length >= this.MAX_ACTIONS_PER_MINUTE) {
+        return true;
+      }
+
+      // Update action history
+      recentActions.push(now);
+      this.playerActionHistory.set(userId, recentActions);
+      
+      return false;
+    } catch (error) {
+      logError(`Rate limiting check error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return false; // Allow on error to prevent blocking legitimate users
+    }
+  }
+
+  /**
+   * Generate secure room ID
+   */
+  private static generateRoomId(): string {
+    try {
+      const timestamp = Date.now().toString(36);
+      const random = Math.random().toString(36).substring(2, 10);
+      const extra = Math.random().toString(36).substring(2, 6);
+      return `room_${timestamp}_${random}_${extra}`;
+    } catch (error) {
+      logError(`Room ID generation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return `room_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    }
+  }
+
+  /**
+   * Add player to matchmaking queue with validation and rate limiting
+   */
+  static addToQueue(player: Player): { success: boolean; error?: string } {
+    try {
+      const validation = this.validatePlayer(player);
+      if (!validation.isValid) {
+        logError(`Player validation failed: ${validation.errors.join(', ')}`);
+        return { success: false, error: validation.errors[0] };
+      }
+
+      const userId = validation.sanitizedPlayer!.userId.toString();
+
+      // Check rate limiting
+      if (this.isRateLimited(userId)) {
+        logError(`Rate limited player attempting to join queue: ${userId}`);
+        return { success: false, error: 'Too many queue actions. Please wait a moment.' };
+      }
+
+      // Check if player is already in queue
+      if (this.queue.has(userId)) {
+        return { success: false, error: 'Player already in queue' };
+      }
+
+      this.queue.set(userId, {
+        ...validation.sanitizedPlayer!,
+        joinedAt: new Date()
+      });
+
+      logDebug(`Player ${validation.sanitizedPlayer!.username} added to matchmaking queue`);
+      return { success: true };
+    } catch (error) {
+      logError(`Add to queue error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      return { success: false, error: 'Failed to add player to queue' };
+    }
   }
 
   /**
@@ -165,14 +311,7 @@ export class MatchmakingManager {
   }
 
   /**
-   * Generate unique room ID
-   */
-  private static generateRoomId(): string {
-    return `room_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-  }
-
-  /**
-   * Get queue statistics
+   * Get queue statistics with enhanced validation
    */
   static getQueueStats(): {
     totalPlayers: number;

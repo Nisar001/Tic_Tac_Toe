@@ -1,189 +1,217 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config';
+import { AuthUtils } from '../utils/auth.utils';
 
 export interface EmailOptions {
   to: string;
   subject: string;
   html?: string;
   text?: string;
+  attachments?: any[];
+}
+
+export interface EmailValidationResult {
+  isValid: boolean;
+  reason?: string;
 }
 
 export class EmailService {
   private static transporter: nodemailer.Transporter;
+  private static emailQueue: Map<string, number> = new Map();
+  private static readonly MAX_EMAILS_PER_HOUR = 10;
+  private static readonly EMAIL_COOLDOWN_MS = 60 * 1000; // 1 minute cooldown
 
-  static initialize() {
-    this.transporter = nodemailer.createTransport({
-      host: config.EMAIL_HOST,
-      port: config.EMAIL_PORT,
-      secure: config.EMAIL_PORT === 465,
-      auth: {
-        user: config.EMAIL_USER,
-        pass: config.EMAIL_PASS,
-      },
-    });
-  }
-
-  static async sendEmail(options: EmailOptions): Promise<void> {
+  /**
+   * Initialize the Nodemailer transporter
+   */
+  static initialize(): void {
     try {
-      if (!this.transporter) {
-        this.initialize();
-      }
+      this.transporter = nodemailer.createTransport({
+        host: config.EMAIL_HOST,
+        port: config.EMAIL_PORT,
+        secure: config.EMAIL_PORT === 465,
+        auth: {
+          user: config.EMAIL_USER,
+          pass: config.EMAIL_PASS,
+        },
+        requireTLS: true,
+        tls: {
+          ciphers: 'SSLv3',
+          rejectUnauthorized: false,
+        },
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        rateLimit: 14,
+      });
 
-      await this.transporter.sendMail({
-        from: config.EMAIL_FROM,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
+      this.transporter.verify((error, success) => {
+        if (error) {
+          console.error('Email transporter verification failed:', error);
+        } else {
+          console.log('Email transporter verified and ready.');
+        }
       });
     } catch (error) {
-      console.error('Email sending failed:', error);
-      throw new Error('Failed to send email');
+      console.error('Error initializing email transporter:', error);
+      throw new Error('Email service failed to initialize.');
     }
   }
 
-  static async sendVerificationEmail(email: string, verificationCode: string): Promise<void> {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Email Verification</title>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .verification-code { font-size: 32px; font-weight: bold; color: #667eea; text-align: center; margin: 20px 0; letter-spacing: 5px; }
-            .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎮 Tic Tac Toe Game</h1>
-              <h2>Email Verification</h2>
-            </div>
-            <div class="content">
-              <p>Hello!</p>
-              <p>Thank you for signing up for our Tic Tac Toe game! To complete your registration, please verify your email address using the code below:</p>
-              
-              <div class="verification-code">${verificationCode}</div>
-              
-              <p>This verification code will expire in 10 minutes for security reasons.</p>
-              
-              <p>If you didn't create an account with us, please ignore this email.</p>
-              
-              <p>Best regards,<br>The Tic Tac Toe Team</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
+  /**
+   * Validate email address format and integrity
+   */
+  static validateEmail(email: string): EmailValidationResult {
+    if (!AuthUtils.isValidEmail(email)) {
+      return { isValid: false, reason: 'Invalid email format' };
+    }
+
+    if (AuthUtils.isSuspiciousEmail(email)) {
+      return { isValid: false, reason: 'Suspicious email address' };
+    }
+
+    const disposableDomains = [
+      '10minutemail.com', 'guerrillamail.com', 'mailinator.com',
+      'tempmail.org', 'throwaway.email', 'getnada.com',
+    ];
+
+    const domain = email.split('@')[1]?.toLowerCase();
+    if (disposableDomains.includes(domain)) {
+      return { isValid: false, reason: 'Disposable email domain is not allowed' };
+    }
+
+    return { isValid: true };
+  }
+
+  /**
+   * Enforce rate limiting for email sends per user
+   */
+  static checkEmailRateLimit(email: string): boolean {
+    const now = Date.now();
+    const key = email.toLowerCase();
+
+    // Remove entries older than 1 hour
+    for (const [emailKey, timestamp] of this.emailQueue.entries()) {
+      if (now - timestamp > 60 * 60 * 1000) {
+        this.emailQueue.delete(emailKey);
+      }
+    }
+
+    const recentEmails = Array.from(this.emailQueue.values())
+      .filter(ts => now - ts < 60 * 60 * 1000);
+
+    if (recentEmails.length >= this.MAX_EMAILS_PER_HOUR) return false;
+
+    const lastSent = this.emailQueue.get(key);
+    if (lastSent && now - lastSent < this.EMAIL_COOLDOWN_MS) return false;
+
+    return true;
+  }
+
+  /**
+   * Generalized email send method with validation and sanitization
+   */
+  static async sendEmail(options: EmailOptions): Promise<void> {
+    try {
+      const validation = this.validateEmail(options.to);
+      if (!validation.isValid) throw new Error(`Invalid email: ${validation.reason}`);
+
+      if (!this.checkEmailRateLimit(options.to)) {
+        throw new Error('Email rate limit exceeded');
+      }
+
+      const sanitized = {
+        to: AuthUtils.validateAndSanitizeInput(options.to, 255),
+        subject: AuthUtils.validateAndSanitizeInput(options.subject, 255),
+        html: options.html?.slice(0, 10000),
+        text: options.text ? AuthUtils.validateAndSanitizeInput(options.text, 5000) : undefined,
+        attachments: options.attachments || [],
+      };
+
+      if (!this.transporter) this.initialize();
+
+      const mailOptions = {
+        from: `"Tic Tac Toe Game" <${config.EMAIL_FROM}>`,
+        to: sanitized.to,
+        subject: sanitized.subject,
+        html: sanitized.html,
+        text: sanitized.text,
+        attachments: sanitized.attachments,
+        headers: {
+          'X-Priority': '3',
+          'X-Mailer': 'Tic Tac Toe Game',
+        },
+      };
+
+      const result = await this.transporter.sendMail(mailOptions);
+      this.emailQueue.set(options.to.toLowerCase(), Date.now());
+
+      console.log(`Email sent to ${options.to}, messageId: ${result.messageId}`);
+    } catch (error: any) {
+      console.error('Error sending email:', error);
+      throw new Error(`Send email failed: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Send verification email with styled HTML
+   */
+  static async sendVerificationEmail(email: string, code: string): Promise<void> {
+    if (!code || code.length < 6) throw new Error('Invalid verification code');
+
+    const sanitizedCode = AuthUtils.validateAndSanitizeInput(code, 20);
+
+    const html = `<p>Your verification code is: <strong>${sanitizedCode}</strong></p>`;
+    const text = `Your verification code is: ${sanitizedCode}`;
 
     await this.sendEmail({
       to: email,
-      subject: '🎮 Verify Your Email - Tic Tac Toe Game',
+      subject: 'Verify Your Email - Tic Tac Toe',
       html,
-      text: `Your verification code is: ${verificationCode}. This code will expire in 10 minutes.`,
+      text,
     });
   }
 
-  static async sendPasswordResetEmail(email: string, resetToken: string): Promise<void> {
-    const resetUrl = `${config.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Password Reset</title>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .button { display: inline-block; background: #667eea; color: white; padding: 12px 30px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎮 Tic Tac Toe Game</h1>
-              <h2>Password Reset</h2>
-            </div>
-            <div class="content">
-              <p>Hello!</p>
-              <p>You requested to reset your password. Click the button below to create a new password:</p>
-              
-              <a href="${resetUrl}" class="button">Reset Password</a>
-              
-              <p>If the button doesn't work, copy and paste this link into your browser:</p>
-              <p>${resetUrl}</p>
-              
-              <p>This link will expire in 1 hour for security reasons.</p>
-              
-              <p>If you didn't request a password reset, please ignore this email.</p>
-              
-              <p>Best regards,<br>The Tic Tac Toe Team</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
+  /**
+   * Send password reset email with secure token link
+   */
+  static async sendPasswordResetEmail(email: string, token: string): Promise<void> {
+    if (!token || token.length < 20) throw new Error('Invalid reset token');
+
+    const sanitizedToken = AuthUtils.validateAndSanitizeInput(token, 100);
+    const resetLink = `${config.FRONTEND_URL}/reset-password?token=${sanitizedToken}`;
+
+    const html = `<p>Click here to reset your password: <a href="${resetLink}">${resetLink}</a></p>`;
+    const text = `Reset your password using this link: ${resetLink}`;
 
     await this.sendEmail({
       to: email,
-      subject: '🔒 Reset Your Password - Tic Tac Toe Game',
+      subject: 'Password Reset - Tic Tac Toe',
       html,
-      text: `Reset your password by visiting: ${resetUrl}. This link will expire in 1 hour.`,
+      text,
     });
   }
 
-  static async sendGameUpdateEmail(email: string, gameResult: string, opponent: string): Promise<void> {
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Game Update</title>
-          <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
-            .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 10px 10px; }
-            .result { font-size: 24px; font-weight: bold; text-align: center; margin: 20px 0; }
-            .win { color: #4caf50; }
-            .lose { color: #f44336; }
-            .draw { color: #ff9800; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="header">
-              <h1>🎮 Tic Tac Toe Game</h1>
-              <h2>Game Update</h2>
-            </div>
-            <div class="content">
-              <p>Hello!</p>
-              <p>Your recent game against <strong>${opponent}</strong> has ended:</p>
-              
-              <div class="result ${gameResult.toLowerCase()}">${gameResult.toUpperCase()}</div>
-              
-              <p>Thanks for playing! Ready for another match?</p>
-              
-              <p>Best regards,<br>The Tic Tac Toe Team</p>
-            </div>
-          </div>
-        </body>
-      </html>
-    `;
+  /**
+   * Send game result notification to a user
+   */
+  static async sendGameNotificationEmail(email: string, result: string, opponent: string): Promise<void> {
+    const validResults = ['win', 'loss', 'draw', 'forfeit'];
+    if (!validResults.includes(result.toLowerCase())) {
+      throw new Error('Invalid game result');
+    }
+
+    const resultUpper = AuthUtils.validateAndSanitizeInput(result, 20).toUpperCase();
+    const opponentSanitized = AuthUtils.validateAndSanitizeInput(opponent, 50);
+
+    const html = `<p>You played against <strong>${opponentSanitized}</strong>. Result: <strong>${resultUpper}</strong></p>`;
+    const text = `Opponent: ${opponentSanitized}\nResult: ${resultUpper}`;
 
     await this.sendEmail({
       to: email,
-      subject: `🎮 Game Result: ${gameResult} - Tic Tac Toe Game`,
+      subject: `Game Result: ${resultUpper} vs ${opponentSanitized}`,
       html,
-      text: `Your game against ${opponent} has ended: ${gameResult}`,
+      text,
     });
   }
 }

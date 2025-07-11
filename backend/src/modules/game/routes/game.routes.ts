@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 
 // Import controllers
 import {
@@ -7,7 +7,8 @@ import {
   createCustomGame,
   getUserGameStats,
   getLeaderboard,
-  forfeitGame
+  forfeitGame,
+  makeMove
 } from '../controllers';
 
 import {
@@ -27,75 +28,109 @@ import {
   validatePagination,
   handleValidationErrors
 } from '../../../middlewares/validation.middleware';
+import { Request as ExpressRequest } from 'express';
 import {
   gameCreationRateLimit,
   createDynamicRateLimit
 } from '../../../middlewares/rateLimiting.middleware';
+import { validateApiKey } from '../../../middlewares/security.middleware';
+import { logWarn } from '../../../utils/logger';
+import { IUser } from '../../../models/user.model';
 
 const router = Router();
+// Patch Express Request type to include user property from user.model
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: IUser;
+  }
+}
 
-// All game routes require authentication
-router.use(authenticate);
+const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
+  Promise.resolve(fn(req, res, next)).catch(next);
+};
 
 // Game management routes
 router.post('/create',
   gameCreationRateLimit,
   checkEnergy(1),
-  createCustomGame
+  asyncHandler(createCustomGame)
 );
 
 router.get('/state/:roomId',
   validateGameId,
   handleValidationErrors,
-  getGameState
+  asyncHandler(getGameState)
 );
 
 router.get('/active',
-  getActiveGames
+  asyncHandler(getActiveGames)
 );
 
 router.post('/forfeit/:roomId',
   validateGameId,
   handleValidationErrors,
-  forfeitGame
+  asyncHandler(forfeitGame)
 );
 
 router.get('/stats',
-  getUserGameStats
+  asyncHandler(getUserGameStats)
 );
 
 router.get('/leaderboard',
   validatePagination,
   handleValidationErrors,
-  getLeaderboard
+  asyncHandler(getLeaderboard)
 );
 
 // Matchmaking routes
 router.post('/matchmaking/join',
   createDynamicRateLimit(10, 60 * 1000), // 10 requests per minute
   checkEnergy(1),
-  joinQueue
+  asyncHandler(joinQueue)
 );
 
 router.post('/matchmaking/leave',
-  leaveQueue
+  asyncHandler(leaveQueue)
 );
 
 router.get('/matchmaking/status',
-  getMatchmakingStatus
+  asyncHandler(getMatchmakingStatus)
 );
 
 router.get('/matchmaking/stats',
-  getQueueStats
+  asyncHandler(getQueueStats)
 );
 
-// Admin routes (should be protected with admin middleware in production)
+// Admin routes (protected with API key validation)
 router.post('/admin/force-match',
-  forceMatch
+  validateApiKey,
+  asyncHandler(forceMatch)
 );
 
 router.post('/admin/cleanup-queue',
-  cleanupQueue
+  validateApiKey,
+  asyncHandler(cleanupQueue)
 );
+
+// Move route
+router.post('/move/:roomId',
+  validateGameMove,
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(makeMove)
+);
+
+// Catch-all for undefined game routes
+router.use('*', (req: Request, res: Response) => {
+  logWarn(`Attempted access to undefined game route: ${req.method} ${req.originalUrl} from IP: ${req.ip}`);
+  res.status(404).json({
+    success: false,
+    message: 'Game endpoint not found',
+    availableEndpoints: [
+      '/create', '/state/:roomId', '/active', '/forfeit/:roomId', 
+      '/stats', '/leaderboard', '/matchmaking/*'
+    ]
+  });
+});
 
 export default router;

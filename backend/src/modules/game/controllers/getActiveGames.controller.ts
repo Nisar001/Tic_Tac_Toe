@@ -1,48 +1,61 @@
 import { Request, Response } from 'express';
-import { socketManager } from '../../../server';
+import { asyncHandler, createError } from '../../../middlewares/error.middleware';
+import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
+import Game from '../../../models/game.model';
 
-export const getActiveGames = async (req: Request, res: Response) => {
+export const getActiveGames = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    if (!socketManager) {
-      return res.status(500).json({
-        success: false,
-        message: 'Socket manager not initialized'
-      });
+    if (!req.user) {
+      throw createError.unauthorized('Authentication required');
     }
 
-    const gameSocket = socketManager.getGameSocket();
-    const activeGames = gameSocket.getActiveGames();
+    const activeGames = await Game.find({
+      status: { $in: ['waiting', 'active'] }
+    })
+      .populate('players.player1', 'username avatar')
+      .populate('players.player2', 'username avatar')
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .select('room status players createdAt moves gameMode isPrivate');
 
-    const gamesData = activeGames.map(game => ({
-      roomId: game.id,
-      status: game.status,
-      players: {
-        X: {
-          username: game.players.X.username
+    const gamesData = activeGames.map((game: any) => {
+      const player1 = game.players?.player1;
+      const player2 = game.players?.player2;
+
+      return {
+        roomId: game.room,
+        status: game.status,
+        players: {
+          player1: player1
+            ? {
+                username: player1.username || 'Unknown',
+                avatar: player1.avatar || null,
+              }
+            : null,
+          player2: player2
+            ? {
+                username: player2.username || 'Unknown',
+                avatar: player2.avatar || null,
+              }
+            : null,
         },
-        O: {
-          username: game.players.O.username
-        }
-      },
-      moveCount: game.moveCount,
-      spectatorCount: game.spectators.length,
-      createdAt: game.createdAt,
-      canSpectate: game.status === 'active'
-    }));
+        moveCount: Array.isArray(game.moves) ? game.moves.length : 0,
+        gameMode: game.gameMode || 'classic',
+        isPrivate: !!game.isPrivate,
+        createdAt: game.createdAt,
+        canJoin: game.status === 'waiting' && !player2,
+      };
+    });
 
     res.json({
       success: true,
       data: {
         games: gamesData,
-        totalActiveGames: activeGames.length
-      }
+        totalActiveGames: gamesData.length,
+      },
     });
-
   } catch (error) {
-    console.error('Get active games error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get active games'
-    });
+    console.error('Error fetching active games:', error);
+    throw createError.internal('Failed to fetch active games');
   }
-};
+});

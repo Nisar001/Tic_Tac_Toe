@@ -1,163 +1,125 @@
 import { Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
+import { asyncHandler, createError } from '../../../middlewares/error.middleware';
+import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
+import { AuthUtils } from '../../../utils/auth.utils';
 import { socketManager } from '../../../server';
 import { MatchmakingManager } from '../../../utils/matchmaking.utils';
 import { EnergyManager } from '../../../utils/energy.utils';
 
-/**
- * Join matchmaking queue
- */
-export const joinQueue = async (req: Request, res: Response) => {
+export const matchmakingRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: {
+    success: false,
+    message: 'Too many matchmaking requests. Please slow down.'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+export const joinQueue = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    if (!req.user) throw createError.unauthorized('Authentication required');
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
+    const userId = (req.user as { _id: string | { toString(): string } })._id.toString();
+    if (req.user.isDeleted || req.user.isBlocked) {
+      throw createError.forbidden('Account is not active');
     }
 
-    // Validate game mode
-    const { gameMode } = req.body;
-    if (gameMode && !['classic', 'blitz', 'ranked'].includes(gameMode)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid game mode'
-      });
+    const { gameMode, skillLevel } = req.body;
+    const validGameModes = ['classic', 'blitz', 'ranked'];
+
+    if (gameMode && !validGameModes.includes(gameMode)) {
+      throw createError.badRequest(`Invalid game mode. Must be one of: ${validGameModes.join(', ')}`);
     }
 
-    // Check user energy
+    if (skillLevel !== undefined && (typeof skillLevel !== 'number' || skillLevel < 1 || skillLevel > 10)) {
+      throw createError.badRequest('Skill level must be a number between 1 and 10');
+    }
+
     const energyStatus = EnergyManager.calculateCurrentEnergy(
-      (req.user as any).energy,
-      (req.user as any).lastEnergyUpdate,
-      (req.user as any).lastEnergyRegenTime
+      req.user.energy,
+      req.user.lastEnergyUpdate ?? new Date(0),
+      req.user.lastEnergyRegenTime ?? new Date(0)
     );
 
     if (!energyStatus.canPlay) {
-      return res.status(400).json({
-        success: false,
-        message: 'Insufficient energy to join queue',
-        energyStatus
-      });
+      const error = createError.badRequest('Insufficient energy to join queue');
+      (error as any).energyStatus = energyStatus;
+      throw error;
     }
 
-    // Check if already in queue
     if (MatchmakingManager.isPlayerInQueue(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Already in matchmaking queue'
-      });
+      throw createError.badRequest('Already in matchmaking queue');
     }
 
-    if (!socketManager) {
-      return res.status(503).json({
-        success: false,
-        message: 'Socket manager not initialized'
-      });
-    }
+    if (!socketManager) throw createError.serviceUnavailable('Matchmaking service is currently unavailable');
 
-    // Get user's socket
     const authManager = socketManager.getAuthManager();
     const userSocket = authManager.getSocketByUserId(userId);
 
-    if (!userSocket) {
-      return res.status(400).json({
-        success: false,
-        message: 'You must be connected via WebSocket to join queue'
-      });
-    }
+    if (!userSocket) throw createError.badRequest('You must be connected via WebSocket to join queue');
 
-    // Trigger join queue through socket
     const matchmakingSocket = socketManager.getMatchmakingSocket();
-    matchmakingSocket.handleFindMatch(userSocket, req.body);
+    const sanitizedData = {
+      gameMode: gameMode || 'classic',
+      skillLevel: skillLevel || 1
+    };
+
+    matchmakingSocket.handleFindMatch(userSocket, sanitizedData);
 
     res.json({
       success: true,
       message: 'Joined matchmaking queue successfully',
-      energyStatus
+      data: {
+        gameMode: sanitizedData.gameMode,
+        energyStatus
+      }
     });
-
-  } catch (error) {
-    console.error('Join queue error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to join matchmaking queue'
-    });
+  } catch (err) {
+    console.error('Join queue error:', err);
+    throw createError.internal('Failed to join matchmaking queue');
   }
-};
+});
 
-/**
- * Leave matchmaking queue
- */
-export const leaveQueue = async (req: Request, res: Response) => {
+export const leaveQueue = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    if (!req.user) throw createError.unauthorized('Authentication required');
+    const userId = (req.user as { _id: string | { toString(): string } })._id.toString();
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
-    }
+    if (!socketManager) throw createError.serviceUnavailable('Matchmaking service is currently unavailable');
 
-    if (!socketManager) {
-      return res.status(500).json({
-        success: false,
-        message: 'Socket manager not initialized'
-      });
-    }
-
-    // Get user's socket
     const authManager = socketManager.getAuthManager();
     const userSocket = authManager.getSocketByUserId(userId);
 
     if (!userSocket) {
-      // Still allow leaving queue even if socket not connected
       const removed = MatchmakingManager.removeFromQueue(userId);
-      
       return res.json({
         success: true,
         message: removed ? 'Left matchmaking queue successfully' : 'Not in queue'
       });
     }
 
-    // Trigger leave queue through socket
     const matchmakingSocket = socketManager.getMatchmakingSocket();
     matchmakingSocket.handleCancelMatchmaking(userSocket);
 
-    res.json({
-      success: true,
-      message: 'Left matchmaking queue successfully'
-    });
-
-  } catch (error) {
-    console.error('Leave queue error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to leave matchmaking queue'
-    });
+    res.json({ success: true, message: 'Left matchmaking queue successfully' });
+  } catch (err) {
+    console.error('Leave queue error:', err);
+    throw createError.internal('Failed to leave matchmaking queue');
   }
-};
+});
 
-/**
- * Get matchmaking status
- */
-export const getMatchmakingStatus = async (req: Request, res: Response) => {
+export const getMatchmakingStatus = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    if (!req.user) throw createError.unauthorized('Authentication required');
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
-    }
-
+    const userId = (req.user as { _id: string | { toString(): string } })._id.toString();
     const isInQueue = MatchmakingManager.isPlayerInQueue(userId);
     const queueStats = MatchmakingManager.getQueueStats();
 
     let queueData = {};
-
     if (isInQueue) {
       const player = MatchmakingManager.getPlayerFromQueue(userId);
       const queuePosition = MatchmakingManager.getQueuePosition(userId);
@@ -170,59 +132,30 @@ export const getMatchmakingStatus = async (req: Request, res: Response) => {
         joinedAt: player?.joinedAt
       };
     } else {
-      queueData = {
-        inQueue: false
-      };
+      queueData = { inQueue: false };
     }
 
-    res.json({
-      success: true,
-      data: {
-        ...queueData,
-        queueStats
-      }
-    });
-
-  } catch (error) {
-    console.error('Get matchmaking status error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get matchmaking status'
-    });
+    res.json({ success: true, data: { ...queueData, queueStats } });
+  } catch (err) {
+    console.error('Matchmaking status error:', err);
+    throw createError.internal('Failed to fetch matchmaking status');
   }
-};
+});
 
-/**
- * Get queue statistics (admin only)
- */
-export const getQueueStats = async (req: Request, res: Response) => {
+export const getQueueStats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // This would normally check for admin role
-    // For now, allow all authenticated users
-
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
-    }
+    if (!req.user) throw createError.unauthorized('Authentication required');
 
     const queueStats = MatchmakingManager.getQueueStats();
 
     if (!socketManager) {
       return res.json({
         success: true,
-        data: {
-          ...queueStats,
-          connectedSockets: 0,
-          authenticatedUsers: 0
-        }
+        data: { ...queueStats, connectedSockets: 0, authenticatedUsers: 0 }
       });
     }
 
     const authManager = socketManager.getAuthManager();
-    
     res.json({
       success: true,
       data: {
@@ -231,56 +164,35 @@ export const getQueueStats = async (req: Request, res: Response) => {
         authenticatedUsers: authManager.getOnlineUsersCount()
       }
     });
-
-  } catch (error) {
-    console.error('Get queue stats error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to get queue statistics'
-    });
+  } catch (err) {
+    console.error('Queue stats error:', err);
+    throw createError.internal('Failed to get queue statistics');
   }
-};
+});
 
-/**
- * Force match (admin only)
- */
-export const forceMatch = async (req: Request, res: Response) => {
+export const forceMatch = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
+    if (!req.user) throw createError.unauthorized('Authentication required');
     const { player1Id, player2Id } = req.body;
-    const userId = req.user?.id;
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
+    if (!player1Id || !player2Id || typeof player1Id !== 'string' || typeof player2Id !== 'string') {
+      throw createError.badRequest('Both player IDs must be valid strings');
     }
 
-    // This would normally check for admin role
-    // For now, allow authenticated users for testing
+    const sanitizedPlayer1Id = AuthUtils.validateAndSanitizeInput(player1Id, 50);
+    const sanitizedPlayer2Id = AuthUtils.validateAndSanitizeInput(player2Id, 50);
 
-    if (!player1Id || !player2Id) {
-      return res.status(400).json({
-        success: false,
-        message: 'Both player IDs are required'
-      });
+    if (sanitizedPlayer1Id === sanitizedPlayer2Id) {
+      throw createError.badRequest('Player IDs must be different');
     }
 
-    if (!socketManager) {
-      return res.status(500).json({
-        success: false,
-        message: 'Socket manager not initialized'
-      });
-    }
+    if (!socketManager) throw createError.serviceUnavailable('Matchmaking service is currently unavailable');
 
     const matchmakingSocket = socketManager.getMatchmakingSocket();
-    const match = matchmakingSocket.forceMatch(player1Id, player2Id);
+    const match = matchmakingSocket.forceMatch(sanitizedPlayer1Id, sanitizedPlayer2Id);
 
     if (!match) {
-      return res.status(400).json({
-        success: false,
-        message: 'Failed to create forced match. Players may not be in queue or available.'
-      });
+      throw createError.badRequest('Failed to create forced match. Players may not be in queue or available.');
     }
 
     res.json({
@@ -292,55 +204,28 @@ export const forceMatch = async (req: Request, res: Response) => {
       },
       message: 'Forced match created successfully'
     });
-
-  } catch (error) {
-    console.error('Force match error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to force match'
-    });
+  } catch (err) {
+    console.error('Force match error:', err);
+    throw createError.internal('Failed to force match');
   }
-};
+});
 
-/**
- * Cleanup queue (admin only)
- */
-export const cleanupQueue = async (req: Request, res: Response) => {
+export const cleanupQueue = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const userId = req.user?.id;
+    if (!req.user) throw createError.unauthorized('Authentication required');
 
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
-    }
-
-    // This would normally check for admin role
-
-    if (!socketManager) {
-      return res.status(500).json({
-        success: false,
-        message: 'Socket manager not initialized'
-      });
-    }
+    if (!socketManager) throw createError.serviceUnavailable('Matchmaking service is currently unavailable');
 
     const matchmakingSocket = socketManager.getMatchmakingSocket();
     const cleanedCount = matchmakingSocket.cleanupQueue();
 
     res.json({
       success: true,
-      data: {
-        cleanedEntries: cleanedCount
-      },
+      data: { cleanedEntries: cleanedCount },
       message: `Cleaned up ${cleanedCount} old queue entries`
     });
-
-  } catch (error) {
-    console.error('Cleanup queue error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to cleanup queue'
-    });
+  } catch (err) {
+    console.error('Cleanup queue error:', err);
+    throw createError.internal('Failed to cleanup matchmaking queue');
   }
-};
+});

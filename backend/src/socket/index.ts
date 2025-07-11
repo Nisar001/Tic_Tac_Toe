@@ -193,16 +193,13 @@ export class SocketManager {
     socket.on('disconnect', (reason: string) => {
       console.log(`👋 User disconnected: ${socket.id}, reason: ${reason}`);
       
-      if (this.authManager.isSocketAuthenticated(socket)) {
+      if (this.authManager.isSocketAuthenticated(socket) && socket.user?.id) {
         // Handle game disconnect
         this.gameSocket.handlePlayerDisconnect(socket.user.id);
-        
         // Handle matchmaking disconnect
         this.matchmakingSocket.handlePlayerDisconnect(socket.user.id);
-        
         // Handle chat disconnect
         this.chatSocket.handlePlayerDisconnect(socket.user.id);
-        
         // Broadcast user offline status
         this.io.emit('user_offline', {
           userId: socket.user.id,

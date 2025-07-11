@@ -15,6 +15,9 @@ import {
   deleteAccount
 } from '../controllers';
 
+// Import social routes
+import socialRoutes from './social.routes';
+
 // Import middleware
 import { authenticate, optionalAuthenticate, checkEnergy } from '../../../middlewares/auth.middleware';
 import {
@@ -34,6 +37,9 @@ import {
 } from '../../../middlewares/rateLimiting.middleware';
 
 const router = Router();
+
+// Social authentication routes
+router.use('/social', socialRoutes);
 
 // Public routes (authentication)
 router.post('/register', 
@@ -81,7 +87,7 @@ router.post('/reset-password',
 router.post('/refresh-token', refreshToken);
 
 // Protected routes (require authentication)
-router.use(authenticate); // All routes below require authentication
+router.use(authenticate as any); // All routes below require authentication
 
 router.get('/profile', getProfile);
 

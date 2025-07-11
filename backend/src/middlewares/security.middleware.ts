@@ -7,16 +7,13 @@ import { config } from '../config';
  * CORS configuration
  */
 export const corsOptions = {
-  origin: (origin: string | undefined, callback: Function) => {
-    // Allow requests with no origin (mobile apps, postman, etc.)
-    if (!origin) {
-      return callback(null, true);
-    }
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
 
     const allowedOrigins = [
       config.FRONTEND_URL,
       'http://localhost:3000',
-      'http://localhost:5173', // Vite default port
+      'http://localhost:5173',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173'
     ];
@@ -35,13 +32,14 @@ export const corsOptions = {
     'Content-Type',
     'Accept',
     'Authorization',
-    'X-API-Key'
+    'X-API-Key',
+    'X-Timestamp'
   ],
   exposedHeaders: ['X-Total-Count', 'X-Page-Count']
 };
 
 /**
- * Helmet security configuration
+ * Helmet config
  */
 export const helmetOptions = {
   contentSecurityPolicy: {
@@ -57,35 +55,24 @@ export const helmetOptions = {
   crossOriginEmbedderPolicy: false
 };
 
-/**
- * Security headers middleware
- */
 export const securityHeaders = helmet(helmetOptions);
-
-/**
- * CORS middleware
- */
 export const corsMiddleware = cors(corsOptions);
 
 /**
- * Custom security middleware
+ * Custom headers
  */
 export const customSecurity = (req: Request, res: Response, next: NextFunction): void => {
-  // Remove X-Powered-By header
   res.removeHeader('X-Powered-By');
-
-  // Add custom security headers
   res.setHeader('X-API-Version', '1.0.0');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-
   next();
 };
 
 /**
- * API key validation middleware (for admin/internal endpoints)
+ * API key validation
  */
 export const validateApiKey = (req: Request, res: Response, next: NextFunction): void => {
   const apiKey = req.headers['x-api-key'];
@@ -111,13 +98,13 @@ export const validateApiKey = (req: Request, res: Response, next: NextFunction):
 };
 
 /**
- * IP whitelist middleware (for admin endpoints)
+ * IP Whitelist
  */
 export const ipWhitelist = (allowedIPs: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const clientIP = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
-    
-    if (!clientIP || !allowedIPs.includes(clientIP)) {
+    const ip = req.ip || req.connection.remoteAddress || req.socket.remoteAddress;
+
+    if (!ip || !allowedIPs.includes(ip)) {
       res.status(403).json({
         success: false,
         message: 'Access denied: IP not whitelisted'
@@ -134,32 +121,35 @@ export const ipWhitelist = (allowedIPs: string[]) => {
  */
 export const requestSizeLimiter = (maxSize: string = '10mb') => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const contentLength = req.headers['content-length'];
-    
-    if (contentLength) {
-      const sizeInBytes = parseInt(contentLength);
-      const maxSizeInBytes = parseMaxSize(maxSize);
-      
-      if (sizeInBytes > maxSizeInBytes) {
-        res.status(413).json({
-          success: false,
-          message: `Request body too large. Maximum size allowed: ${maxSize}`
-        });
-        return;
+    try {
+      const contentLength = req.headers['content-length'];
+      if (contentLength) {
+        const sizeInBytes = parseInt(contentLength, 10);
+        const maxSizeInBytes = parseMaxSize(maxSize);
+        if (sizeInBytes > maxSizeInBytes) {
+          res.status(413).json({
+            success: false,
+            message: `Request body too large. Maximum allowed: ${maxSize}`
+          });
+          return;
+        }
       }
+      next();
+    } catch (err) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid content length'
+      });
     }
-
-    next();
   };
 };
 
 /**
- * User agent validation (block known bad bots)
+ * User-Agent blocking
  */
 export const userAgentValidation = (req: Request, res: Response, next: NextFunction): void => {
-  const userAgent = req.headers['user-agent'];
-  
-  // List of blocked user agents (bots, scrapers, etc.)
+  const userAgent = req.headers['user-agent'] || '';
+
   const blockedAgents = [
     /curl/i,
     /wget/i,
@@ -178,9 +168,7 @@ export const userAgentValidation = (req: Request, res: Response, next: NextFunct
     return;
   }
 
-  const isBlocked = blockedAgents.some(pattern => pattern.test(userAgent));
-  
-  if (isBlocked) {
+  if (blockedAgents.some(pattern => pattern.test(userAgent))) {
     res.status(403).json({
       success: false,
       message: 'Access denied: Automated requests not allowed'
@@ -192,40 +180,43 @@ export const userAgentValidation = (req: Request, res: Response, next: NextFunct
 };
 
 /**
- * Request timestamp validation
+ * Timestamp freshness
  */
-export const timestampValidation = (maxAge: number = 300000) => { // 5 minutes default
+export const timestampValidation = (maxAge = 5 * 60 * 1000) => {
   return (req: Request, res: Response, next: NextFunction): void => {
-    const timestamp = req.headers['x-timestamp'];
-    
-    if (!timestamp) {
-      next(); // Optional validation
-      return;
-    }
+    try {
+      const timestamp = req.headers['x-timestamp'];
+      if (!timestamp) return next();
 
-    const requestTime = parseInt(timestamp as string);
-    const currentTime = Date.now();
-    
-    if (isNaN(requestTime) || Math.abs(currentTime - requestTime) > maxAge) {
+      const requestTime = parseInt(timestamp as string, 10);
+      const currentTime = Date.now();
+
+      if (isNaN(requestTime) || Math.abs(currentTime - requestTime) > maxAge) {
+        res.status(400).json({
+          success: false,
+          message: 'Request timestamp is invalid or too old'
+        });
+        return;
+      }
+
+      next();
+    } catch {
       res.status(400).json({
         success: false,
-        message: 'Request timestamp is invalid or too old'
+        message: 'Invalid timestamp header'
       });
-      return;
     }
-
-    next();
   };
 };
 
 /**
- * Content type validation
+ * Validate content type
  */
 export const contentTypeValidation = (allowedTypes: string[]) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     const contentType = req.headers['content-type'];
-    
-    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+
+    if (['POST', 'PUT', 'PATCH'].includes(req.method)) {
       if (!contentType || !allowedTypes.some(type => contentType.includes(type))) {
         res.status(400).json({
           success: false,
@@ -241,63 +232,56 @@ export const contentTypeValidation = (allowedTypes: string[]) => {
 };
 
 /**
- * Helper function to parse size strings
+ * Helper - Parse max size string to bytes
  */
 function parseMaxSize(size: string): number {
   const units: Record<string, number> = {
     b: 1,
     kb: 1024,
-    mb: 1024 * 1024,
-    gb: 1024 * 1024 * 1024
+    mb: 1024 ** 2,
+    gb: 1024 ** 3
   };
 
   const match = size.toLowerCase().match(/^(\d+(?:\.\d+)?)(b|kb|mb|gb)$/);
-  
-  if (!match) {
-    throw new Error('Invalid size format');
-  }
+  if (!match) throw new Error('Invalid size format');
 
   const [, value, unit] = match;
   return parseFloat(value) * units[unit];
 }
 
 /**
- * Sanitize request headers
+ * Remove suspicious headers
  */
 export const sanitizeHeaders = (req: Request, res: Response, next: NextFunction): void => {
-  // Remove potentially dangerous headers
   delete req.headers['x-forwarded-host'];
   delete req.headers['x-cluster-client-ip'];
   delete req.headers['x-real-ip'];
-
   next();
 };
 
 /**
- * Monitor suspicious activities
+ * Detect suspicious payloads
  */
 export const activityMonitor = (req: Request, res: Response, next: NextFunction): void => {
   const suspiciousPatterns = [
-    /\.\./,  // Directory traversal
-    /<script/i,  // XSS attempts
-    /union.*select/i,  // SQL injection
-    /javascript:/i,  // JavaScript injection
-    /eval\(/i,  // Code injection
+    /\.\./,
+    /<script/i,
+    /union.*select/i,
+    /javascript:/i,
+    /eval\(/i
   ];
 
-  const checkString = `${req.url} ${JSON.stringify(req.query)} ${JSON.stringify(req.body)}`;
-  
-  const isSuspicious = suspiciousPatterns.some(pattern => pattern.test(checkString));
-  
-  if (isSuspicious) {
-    console.warn('Suspicious activity detected:', {
+  const payload = `${req.url} ${JSON.stringify(req.query)} ${JSON.stringify(req.body)}`;
+
+  if (suspiciousPatterns.some(pattern => pattern.test(payload))) {
+    console.warn('Suspicious activity detected', {
       ip: req.ip,
       userAgent: req.headers['user-agent'],
       url: req.url,
       method: req.method,
       timestamp: new Date().toISOString()
     });
-    
+
     res.status(400).json({
       success: false,
       message: 'Malicious request detected'

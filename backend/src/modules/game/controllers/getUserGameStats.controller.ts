@@ -1,46 +1,68 @@
 import { Request, Response } from 'express';
-import { socketManager } from '../../../server';
+import { asyncHandler, createError } from '../../../middlewares/error.middleware';
+import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
+import User from '../../../models/user.model';
+import Game from '../../../models/game.model';
 
 /**
- * Get user game stats
+ * Get user game stats and recent games
  */
-export const getUserGameStats = async (req: Request, res: Response) => {
+export const getUserGameStats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: 'User ID is required',
-      });
+    if (!req.user) {
+      throw createError.unauthorized('Authentication required');
     }
 
-    if (!socketManager) {
-      return res.status(500).json({
-        success: false,
-        message: 'Socket manager not initialized',
-      });
+    const userId = req.user._id;
+
+    // Fetch user stats
+    const user = await User.findById(userId).select('stats level xp');
+    if (!user) {
+      throw createError.notFound('User not found');
     }
 
-    const gameSocket = socketManager.getGameSocket();
+    // Fetch recent games
+    const recentGames = await Game.find({
+      $or: [
+        { 'players.player1': userId },
+        { 'players.player2': userId }
+      ]
+    })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .select('status result winner players createdAt moves');
 
-    if (!gameSocket.getUserGameStats) {
-      return res.status(500).json({
-        success: false,
-        message: 'getUserGameStats method not implemented',
-      });
-    }
+    const totalGames = user.stats?.gamesPlayed || 0;
+    const wins = user.stats?.wins || 0;
+    const losses = user.stats?.losses || 0;
+    const draws = user.stats?.draws || 0;
 
-    const userStats = gameSocket.getUserGameStats(userId);
+    const winRate = totalGames > 0 ? parseFloat(((wins / totalGames) * 100).toFixed(1)) : 0.0;
 
     res.status(200).json({
       success: true,
-      data: userStats,
+      data: {
+        stats: {
+          level: user.level || 0,
+          xp: user.xp || 0,
+          gamesPlayed: totalGames,
+          wins,
+          losses,
+          draws,
+          winRate
+        },
+        recentGames: recentGames.map(game => ({
+          id: game._id,
+          status: game.status,
+          result: game.result,
+          winner: game.winner,
+          createdAt: game.createdAt,
+          moveCount: Array.isArray(game.moves) ? game.moves.length : 0
+        }))
+      }
     });
-  } catch (error: any) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+  } catch (error) {
+    console.error('Error in getUserGameStats:', error);
+    throw createError.internal('Failed to retrieve user game stats');
   }
-};
+});

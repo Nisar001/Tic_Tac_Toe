@@ -1,6 +1,6 @@
 export { getChatHistory } from './getChatHistory.controller';
-export { getChatRooms } from './getChatRooms.controller';
-export { sendMessage } from './sendMessage.controller';
-export { joinChatRoom } from './joinChatRoom.controller';
-export { leaveChatRoom } from './leaveChatRoom.controller';
-export { getChatRoomUsers } from './getChatRoomUsers.controller';
+export { getChatRooms, getChatRoomsRateLimit } from './getChatRooms.controller';
+export { sendMessage, sendMessageRateLimit } from './sendMessage.controller';
+export { joinChatRoom, joinChatRoomRateLimit } from './joinChatRoom.controller';
+export { leaveChatRoom, leaveChatRoomRateLimit } from './leaveChatRoom.controller';
+export { getChatRoomUsers, getChatRoomUsersRateLimit } from './getChatRoomUsers.controller';

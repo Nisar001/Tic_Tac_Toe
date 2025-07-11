@@ -3,194 +3,237 @@ import { AuthUtils } from '../utils/auth.utils';
 import User from '../models/user.model';
 import { IUser } from '../models/user.model';
 import { JWTPayload } from '../types';
+import { logError, logDebug } from '../utils/logger';
 
 export interface AuthenticatedRequest extends Request {
-  user?: any; // Will be properly typed after User model is fixed
+  user?: IUser;
   token?: string;
+  requestId?: string;
 }
 
-/**
- * Middleware to authenticate user using JWT token
- */
+const authAttempts = new Map<string, { count: number; lastAttempt: Date }>();
+const MAX_AUTH_ATTEMPTS = 10;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+
 export const authenticate = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
-  try {
-    const authHeader = req.headers.authorization;
-    const token = AuthUtils.extractTokenFromHeader(authHeader);
+  const requestId = `auth_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  req.requestId = requestId;
 
-    if (!token) {
-      res.status(401).json({ 
-        success: false, 
-        message: 'Access token required' 
-      });
+  try {
+    const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+    if (isRateLimited(clientIP)) {
+      logError(`Authentication rate limit exceeded for IP: ${clientIP}`);
+      res.status(429).json({ success: false, message: 'Too many authentication attempts. Please try again later.', retryAfter: 15 * 60 });
       return;
     }
 
-    const decoded = AuthUtils.verifyAccessToken(token);
-    const user = await User.findById(decoded.userId).select('-password') as IUser;
+    const authHeader = req.headers.authorization;
+    if (!authHeader || typeof authHeader !== 'string') {
+      recordAuthAttempt(clientIP, false);
+      res.status(401).json({ success: false, message: 'Authorization header required' });
+      return;
+    }
+
+    const token = AuthUtils.extractTokenFromHeader(authHeader);
+    if (!token || typeof token !== 'string' || token.length < 10 || token.length > 1000) {
+      recordAuthAttempt(clientIP, false);
+      logError(`Invalid token format from IP: ${clientIP}`);
+      res.status(401).json({ success: false, message: 'Invalid token format' });
+      return;
+    }
+
+    let decoded: JWTPayload;
+    try {
+      decoded = AuthUtils.verifyAccessToken(token);
+    } catch (tokenError) {
+      recordAuthAttempt(clientIP, false);
+      logError(`Token verification failed for request ${requestId}: ${tokenError instanceof Error ? tokenError.message : 'Unknown error'}`);
+      res.status(401).json({ success: false, message: 'Invalid or expired token' });
+      return;
+    }
+
+    if (!decoded || !decoded.userId || typeof decoded.userId !== 'string') {
+      recordAuthAttempt(clientIP, false);
+      logError(`Invalid token payload for request ${requestId}`);
+      res.status(401).json({ success: false, message: 'Invalid token payload' });
+      return;
+    }
+
+    let user: IUser | null;
+    try {
+      user = await User.findById(decoded.userId).select('-password') as IUser;
+    } catch (dbError) {
+      recordAuthAttempt(clientIP, false);
+      logError(`Database error during authentication for request ${requestId}: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`);
+      res.status(500).json({ success: false, message: 'Authentication service temporarily unavailable' });
+      return;
+    }
 
     if (!user) {
-      res.status(401).json({ 
-        success: false, 
-        message: 'User not found' 
-      });
+      recordAuthAttempt(clientIP, false);
+      logError(`User not found for token in request ${requestId}: ${decoded.userId}`);
+      res.status(401).json({ success: false, message: 'User not found' });
       return;
     }
 
     if (!user.isEmailVerified) {
-      res.status(401).json({ 
-        success: false, 
-        message: 'Email not verified' 
-      });
+      recordAuthAttempt(clientIP, false);
+      logDebug(`Email not verified for user ${user._id} in request ${requestId}`);
+      res.status(401).json({ success: false, message: 'Email not verified', requiresVerification: true });
       return;
     }
 
+    if (!user.isOnline && user.lastSeen) {
+      const daysSinceLastSeen = (Date.now() - user.lastSeen.getTime()) / (1000 * 60 * 60 * 24);
+      if (daysSinceLastSeen > 90) {
+        logError(`Inactive account accessed for user ${user._id} in request ${requestId}`);
+        res.status(401).json({ success: false, message: 'Account has been inactive. Please contact support.' });
+        return;
+      }
+    }
+
+    recordAuthAttempt(clientIP, true);
     req.user = user;
     req.token = token;
+    logDebug(`Authentication successful for user ${user._id} in request ${requestId}`);
     next();
   } catch (error) {
-    res.status(401).json({ 
-      success: false, 
-      message: 'Invalid or expired token' 
-    });
+    const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+    recordAuthAttempt(clientIP, false);
+    logError(`Unexpected authentication error for request ${requestId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    res.status(500).json({ success: false, message: 'Authentication service error' });
   }
 };
 
-/**
- * Middleware to authenticate user but not require it
- */
 export const optionalAuthenticate = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ): Promise<void> => {
+  const requestId = `opt_auth_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  req.requestId = requestId;
+
   try {
     const authHeader = req.headers.authorization;
-    const token = AuthUtils.extractTokenFromHeader(authHeader);
+    if (!authHeader || typeof authHeader !== 'string') return next();
 
-    if (token) {
-      const decoded = AuthUtils.verifyAccessToken(token);
-      const user = await User.findById(decoded.userId).select('-password') as IUser;
-      
-      if (user && user.isEmailVerified) {
-        req.user = user;
-        req.token = token;
-      }
+    const token = AuthUtils.extractTokenFromHeader(authHeader);
+    if (!token || typeof token !== 'string' || token.length < 10 || token.length > 1000) return next();
+
+    let decoded: JWTPayload;
+    try {
+      decoded = AuthUtils.verifyAccessToken(token);
+    } catch {
+      return next();
+    }
+
+    if (!decoded || !decoded.userId || typeof decoded.userId !== 'string') return next();
+
+    const user = await User.findById(decoded.userId).select('-password') as IUser;
+    if (user && user.isEmailVerified) {
+      req.user = user;
+      req.token = token;
+      logDebug(`Optional authentication successful for user ${user._id} in request ${requestId}`);
     }
 
     next();
   } catch (error) {
-    // Ignore authentication errors for optional authentication
+    logError(`Unexpected optional authentication error for request ${requestId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     next();
   }
 };
 
-/**
- * Middleware to check if user has sufficient energy
- */
 export const checkEnergy = (energyRequired: number = 1) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      res.status(401).json({ 
-        success: false, 
-        message: 'Authentication required' 
-      });
-      return;
-    }
+    try {
+      if (typeof energyRequired !== 'number' || isNaN(energyRequired) || energyRequired < 0) {
+        res.status(500).json({ success: false, message: 'Invalid energy requirement configuration' });
+        return;
+      }
 
-    if (req.user.energy < energyRequired) {
-      res.status(403).json({ 
-        success: false, 
-        message: 'Insufficient energy',
-        currentEnergy: req.user.energy,
-        requiredEnergy: energyRequired
-      });
-      return;
-    }
+      if (!req.user) {
+        res.status(401).json({ success: false, message: 'Authentication required' });
+        return;
+      }
 
-    next();
-  };
-};
+      const currentEnergy = req.user.energy;
+      if (typeof currentEnergy !== 'number' || isNaN(currentEnergy)) {
+        res.status(500).json({ success: false, message: 'User energy data is invalid' });
+        return;
+      }
 
-/**
- * Middleware to check if user is admin
- */
-export const requireAdmin = (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): void => {
-  if (!req.user) {
-    res.status(401).json({ 
-      success: false, 
-      message: 'Authentication required' 
-    });
-    return;
-  }
+      try {
+        req.user.regenerateEnergy?.();
+      } catch (regenError) {
+        logError(`Energy regeneration failed for user ${req.user._id}: ${regenError instanceof Error ? regenError.message : 'Unknown error'}`);
+      }
 
-  if (req.user.role !== 'admin') {
-    res.status(403).json({ 
-      success: false, 
-      message: 'Admin access required' 
-    });
-    return;
-  }
+      if (req.user.energy < energyRequired) {
+        res.status(403).json({
+          success: false,
+          message: 'Insufficient energy',
+          currentEnergy: req.user.energy,
+          requiredEnergy: energyRequired,
+          nextRegenTime: req.user.energyUpdatedAt
+            ? new Date(req.user.energyUpdatedAt.getTime() + 90 * 60 * 1000)
+            : new Date(Date.now() + 90 * 60 * 1000)
+        });
+        return;
+      }
 
-  next();
-};
-
-/**
- * Middleware to check minimum level requirement
- */
-export const requireLevel = (minLevel: number) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      res.status(401).json({ 
-        success: false, 
-        message: 'Authentication required' 
-      });
-      return;
-    }
-
-    if (req.user.level < minLevel) {
-      res.status(403).json({ 
-        success: false, 
-        message: `Level ${minLevel} required`,
-        currentLevel: req.user.level,
-        requiredLevel: minLevel
-      });
-      return;
-    }
-
-    next();
-  };
-};
-
-/**
- * Middleware to refresh user data from database
- */
-export const refreshUser = async (
-  req: AuthenticatedRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
-  try {
-    if (!req.user) {
       next();
-      return;
+    } catch (error) {
+      res.status(500).json({ success: false, message: 'Energy validation service error' });
     }
-
-    const refreshedUser = await User.findById(req.user._id).select('-password') as IUser;
-    if (refreshedUser) {
-      req.user = refreshedUser;
-    }
-
-    next();
-  } catch (error) {
-    console.error('User refresh failed:', error);
-    next(); // Continue even if refresh fails
-  }
+  };
 };
+
+function isRateLimited(clientIP: string): boolean {
+  try {
+    const now = new Date();
+    const attempts = authAttempts.get(clientIP);
+    if (!attempts) return false;
+
+    if (now.getTime() - attempts.lastAttempt.getTime() > AUTH_WINDOW_MS) {
+      authAttempts.delete(clientIP);
+      return false;
+    }
+
+    return attempts.count >= MAX_AUTH_ATTEMPTS;
+  } catch (error) {
+    return false;
+  }
+}
+
+function recordAuthAttempt(clientIP: string, success: boolean): void {
+  try {
+    const now = new Date();
+    const attempts = authAttempts.get(clientIP);
+
+    if (!attempts || now.getTime() - attempts.lastAttempt.getTime() > AUTH_WINDOW_MS) {
+      authAttempts.set(clientIP, { count: success ? 0 : 1, lastAttempt: now });
+    } else {
+      authAttempts.set(clientIP, {
+        count: success ? 0 : attempts.count + 1,
+        lastAttempt: now
+      });
+    }
+  } catch {}
+}
+
+setInterval(() => {
+  try {
+    const now = new Date();
+    for (const [ip, { lastAttempt }] of authAttempts.entries()) {
+      if (now.getTime() - lastAttempt.getTime() > AUTH_WINDOW_MS * 2) {
+        authAttempts.delete(ip);
+      }
+    }
+  } catch (err) {
+    logError(`Auth attempts cleanup error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+  }
+}, AUTH_WINDOW_MS);

@@ -1,6 +1,28 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import { Request, Response } from 'express';
 import { config } from '../config';
+
+/**
+ * Default handler generator
+ */
+const rateLimitHandler = (retryAfterSeconds: number, message: string) => {
+  return (req: Request, res: Response) => {
+    res.status(429).json({
+      success: false,
+      message,
+      retryAfter: retryAfterSeconds
+    });
+  };
+};
+
+/**
+ * Default message object generator
+ */
+const createMessage = (msg: string, retryAfterSeconds: number) => ({
+  success: false,
+  message: msg,
+  retryAfter: retryAfterSeconds
+});
 
 /**
  * General rate limiting middleware
@@ -8,20 +30,16 @@ import { config } from '../config';
 export const generalRateLimit = rateLimit({
   windowMs: config.RATE_LIMIT.WINDOW_MS,
   max: config.RATE_LIMIT.MAX_REQUESTS,
-  message: {
-    success: false,
-    message: 'Too many requests, please try again later',
-    retryAfter: Math.ceil(config.RATE_LIMIT.WINDOW_MS / 1000)
-  },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many requests, please try again later',
-      retryAfter: Math.ceil(config.RATE_LIMIT.WINDOW_MS / 1000)
-    });
-  }
+  message: createMessage(
+    'Too many requests, please try again later',
+    Math.ceil(config.RATE_LIMIT.WINDOW_MS / 1000)
+  ),
+  handler: rateLimitHandler(
+    Math.ceil(config.RATE_LIMIT.WINDOW_MS / 1000),
+    'Too many requests, please try again later'
+  )
 });
 
 /**
@@ -29,181 +47,152 @@ export const generalRateLimit = rateLimit({
  */
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
-  message: {
-    success: false,
-    message: 'Too many authentication attempts, please try again later',
-    retryAfter: 900 // 15 minutes
-  },
+  max: 5,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: true,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many authentication attempts, please try again later',
-      retryAfter: 900
-    });
-  }
+  message: createMessage(
+    'Too many authentication attempts, please try again later',
+    900
+  ),
+  handler: rateLimitHandler(
+    900,
+    'Too many authentication attempts, please try again later'
+  )
 });
 
 /**
- * Rate limiting for password reset requests
+ * Password reset request rate limiter
  */
 export const passwordResetRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // 3 requests per hour
-  message: {
-    success: false,
-    message: 'Too many password reset requests, please try again later',
-    retryAfter: 3600 // 1 hour
-  },
+  windowMs: 60 * 60 * 1000,
+  max: 3,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many password reset requests, please try again later',
-      retryAfter: 3600
-    });
-  }
+  message: createMessage(
+    'Too many password reset requests, please try again later',
+    3600
+  ),
+  handler: rateLimitHandler(
+    3600,
+    'Too many password reset requests, please try again later'
+  )
 });
 
 /**
- * Rate limiting for email verification requests
+ * Email verification request limiter
  */
 export const emailVerificationRateLimit = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 3, // 3 requests per 5 minutes
-  message: {
-    success: false,
-    message: 'Too many verification requests, please try again later',
-    retryAfter: 300 // 5 minutes
-  },
+  windowMs: 5 * 60 * 1000,
+  max: 3,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many verification requests, please try again later',
-      retryAfter: 300
-    });
-  }
+  message: createMessage(
+    'Too many verification requests, please try again later',
+    300
+  ),
+  handler: rateLimitHandler(
+    300,
+    'Too many verification requests, please try again later'
+  )
 });
 
 /**
- * Rate limiting for game creation
+ * Game creation limiter
  */
 export const gameCreationRateLimit = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10, // 10 games per minute
-  message: {
-    success: false,
-    message: 'Too many game creation requests, please slow down',
-    retryAfter: 60
-  },
+  windowMs: 60 * 1000,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many game creation requests, please slow down',
-      retryAfter: 60
-    });
-  }
+  message: createMessage(
+    'Too many game creation requests, please slow down',
+    60
+  ),
+  handler: rateLimitHandler(
+    60,
+    'Too many game creation requests, please slow down'
+  )
 });
 
 /**
- * Rate limiting for chat messages
+ * Chat message limiter
  */
 export const chatRateLimit = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 30, // 30 messages per minute
-  message: {
-    success: false,
-    message: 'Too many messages, please slow down',
-    retryAfter: 60
-  },
+  windowMs: 60 * 1000,
+  max: 30,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many messages, please slow down',
-      retryAfter: 60
-    });
-  }
+  message: createMessage(
+    'Too many messages, please slow down',
+    60
+  ),
+  handler: rateLimitHandler(
+    60,
+    'Too many messages, please slow down'
+  )
 });
 
 /**
- * Rate limiting for friend requests
+ * Friend request limiter
  */
 export const friendRequestRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 20, // 20 friend requests per hour
-  message: {
-    success: false,
-    message: 'Too many friend requests, please try again later',
-    retryAfter: 3600
-  },
+  windowMs: 60 * 60 * 1000,
+  max: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many friend requests, please try again later',
-      retryAfter: 3600
-    });
-  }
+  message: createMessage(
+    'Too many friend requests, please try again later',
+    3600
+  ),
+  handler: rateLimitHandler(
+    3600,
+    'Too many friend requests, please try again later'
+  )
 });
 
 /**
- * Rate limiting for profile updates
+ * Profile update limiter
  */
 export const profileUpdateRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 10, // 10 updates per hour
-  message: {
-    success: false,
-    message: 'Too many profile updates, please try again later',
-    retryAfter: 3600
-  },
+  windowMs: 60 * 60 * 1000,
+  max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req: Request, res: Response) => {
-    res.status(429).json({
-      success: false,
-      message: 'Too many profile updates, please try again later',
-      retryAfter: 3600
-    });
-  }
+  message: createMessage(
+    'Too many profile updates, please try again later',
+    3600
+  ),
+  handler: rateLimitHandler(
+    3600,
+    'Too many profile updates, please try again later'
+  )
 });
 
 /**
- * Dynamic rate limiting based on user level
+ * Dynamic rate limiter based on user level
  */
-export const createDynamicRateLimit = (baseMax: number, windowMs: number = 60000) => {
+export const createDynamicRateLimit = (
+  baseMax: number,
+  windowMs: number = 60 * 1000
+): RateLimitRequestHandler => {
   return rateLimit({
     windowMs,
-    max: (req: Request) => {
-      // Increase rate limit for higher level users
+    max: (req: Request): number => {
       const user = (req as any).user;
-      const userLevel = user?.level || 1;
-      const multiplier = Math.min(1 + (userLevel - 1) * 0.1, 2); // Max 2x for high level users
+      const level = typeof user?.level === 'number' ? user.level : 1;
+      const multiplier = Math.min(1 + (level - 1) * 0.1, 2);
       return Math.floor(baseMax * multiplier);
-    },
-    message: {
-      success: false,
-      message: 'Rate limit exceeded, please try again later'
     },
     standardHeaders: true,
     legacyHeaders: false,
-    handler: (req: Request, res: Response) => {
-      res.status(429).json({
-        success: false,
-        message: 'Rate limit exceeded, please try again later',
-        retryAfter: Math.ceil(windowMs / 1000)
-      });
-    }
+    message: createMessage(
+      'Rate limit exceeded, please try again later',
+      Math.ceil(windowMs / 1000)
+    ),
+    handler: rateLimitHandler(
+      Math.ceil(windowMs / 1000),
+      'Rate limit exceeded, please try again later'
+    )
   });
 };

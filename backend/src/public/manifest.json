@@ -1,0 +1,8 @@
+{
+  "name": "Tic Tac Toe",
+  "short_name": "TicTacToe",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "description": "Tic Tac Toe Game Backend Manifest"
+}

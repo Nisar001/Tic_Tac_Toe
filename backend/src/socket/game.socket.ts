@@ -32,6 +32,7 @@ export class GameSocket {
   private authManager: SocketAuthManager;
   private io: SocketIOServer;
   private activeGames: Map<string, GameRoom> = new Map();
+  handleGameForfeit: any;
 
   constructor(io: SocketIOServer, authManager: SocketAuthManager) {
     this.io = io;
@@ -67,8 +68,8 @@ export class GameSocket {
       }
 
       // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user.id;
+      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
+      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
       
       if (!isPlayerX && !isPlayerO) {
         // Add as spectator
@@ -101,11 +102,11 @@ export class GameSocket {
 
       // Notify opponent
       socket.to(roomId).emit('opponent_joined', {
-        playerId: socket.user.id,
-        username: socket.user.username
+        playerId: socket.user?.id ?? 'unknown',
+        username: socket.user?.username ?? 'unknown'
       });
 
-      console.log(`🎮 Player ${socket.user.id} joined game room ${roomId} as ${playerSymbol}`);
+      console.log(`🎮 Player ${socket.user?.id ?? 'unknown'} joined game room ${roomId} as ${playerSymbol}`);
 
     } catch (error) {
       console.error('Join room error:', error);
@@ -175,8 +176,8 @@ export class GameSocket {
       }
 
       // Determine player symbol
-      const isPlayerX = gameRoom.players.X.userId === socket.user.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user.id;
+      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
+      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
       
       if (!isPlayerX && !isPlayerO) {
         socket.emit('game_error', { message: 'You are not a player in this game' });
@@ -265,8 +266,8 @@ export class GameSocket {
       }
 
       // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user.id;
+      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
+      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
       
       if (!isPlayerX && !isPlayerO) {
         socket.emit('game_error', { message: 'You are not a player in this game' });
@@ -317,8 +318,8 @@ export class GameSocket {
       }
 
       // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user.id;
+      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
+      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
       
       if (!isPlayerX && !isPlayerO) {
         socket.emit('game_error', { message: 'You are not a player in this game' });
@@ -330,7 +331,7 @@ export class GameSocket {
       // Broadcast rematch request to opponent
       socket.to(roomId).emit('rematch_requested', {
         requestingPlayer,
-        message: `${socket.user.username} requested a rematch`
+        message: `${socket.user?.username} requested a rematch`
       });
 
       socket.emit('rematch_request_sent', {
@@ -405,8 +406,8 @@ export class GameSocket {
       }
 
       // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user.id;
+      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
+      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
       
       if (!isPlayerX && !isPlayerO) {
         socket.emit('game_error', { message: 'You are not a player in this game' });
@@ -486,8 +487,8 @@ export class GameSocket {
       }
 
       // Check if already a player in this game
-      const isPlayer = gameRoom.players.X.userId === socket.user.id || 
-                      gameRoom.players.O.userId === socket.user.id;
+      const isPlayer = gameRoom.players.X.userId === socket.user?.id || 
+                      gameRoom.players.O.userId === socket.user?.id;
       
       if (isPlayer) {
         socket.emit('game_error', { message: 'You are already a player in this game' });
@@ -513,7 +514,7 @@ export class GameSocket {
         spectatorCount: gameRoom.spectators.length
       });
 
-      console.log(`👁️ User ${socket.user.id} started spectating room ${roomId}`);
+      console.log(`👁️ User ${socket.user?.id} started spectating room ${roomId}`);
 
     } catch (error) {
       console.error('Spectate game error:', error);
@@ -556,7 +557,7 @@ export class GameSocket {
         spectatorCount: gameRoom.spectators.length
       });
 
-      console.log(`👁️ User ${socket.user.id} stopped spectating room ${roomId}`);
+      console.log(`👁️ User ${socket.user?.id} stopped spectating room ${roomId}`);
 
     } catch (error) {
       console.error('Stop spectating error:', error);

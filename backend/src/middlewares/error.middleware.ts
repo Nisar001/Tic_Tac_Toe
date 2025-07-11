@@ -6,7 +6,8 @@ export interface CustomError extends Error {
   code?: string | number;
   path?: string;
   value?: any;
-  errors?: any;
+  keyValue?: Record<string, any>;
+  errors?: Record<string, MongooseError.ValidatorError>;
 }
 
 /**
@@ -18,42 +19,53 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  let statusCode = error.statusCode || 500;
+  let statusCode = error.statusCode ?? 500;
   let message = error.message || 'Internal Server Error';
-  let details: any = {};
+  let details: Record<string, any> = {};
 
-  // Log error for debugging
+  // Log full error in development
   if (process.env.NODE_ENV === 'development') {
-    console.error('Error Stack:', error.stack);
-    console.error('Error Details:', error);
+    console.error('💥 Error Stack:', error.stack);
+    console.error('🧠 Error Object:', error);
   }
 
-  // Handle specific error types
-  if (error.name === 'ValidationError') {
-    statusCode = 400;
-    message = 'Validation Error';
-    details = handleValidationError(error as MongooseError.ValidationError);
-  } else if (error.name === 'CastError') {
-    statusCode = 400;
-    message = 'Invalid ID format';
-    details = { field: (error as any).path, value: (error as any).value };
-  } else if (error.code === 11000) {
+  switch (error.name) {
+    case 'ValidationError':
+      statusCode = 400;
+      message = 'Validation Error';
+      details = handleValidationError(error as MongooseError.ValidationError);
+      break;
+    case 'CastError':
+      statusCode = 400;
+      message = 'Invalid ID format';
+      details = {
+        field: (error as any).path,
+        value: (error as any).value
+      };
+      break;
+    case 'JsonWebTokenError':
+      statusCode = 401;
+      message = 'Invalid token';
+      break;
+    case 'TokenExpiredError':
+      statusCode = 401;
+      message = 'Token expired';
+      break;
+    case 'MongoNetworkError':
+    case 'MongoTimeoutError':
+      statusCode = 503;
+      message = 'Database connection error';
+      break;
+  }
+
+  // Duplicate key error (code 11000)
+  if (error.code === 11000) {
     statusCode = 409;
-    const duplicateError = handleDuplicateKeyError(error);
-    message = duplicateError.message;
-    details = duplicateError.details;
-  } else if (error.name === 'JsonWebTokenError') {
-    statusCode = 401;
-    message = 'Invalid token';
-  } else if (error.name === 'TokenExpiredError') {
-    statusCode = 401;
-    message = 'Token expired';
-  } else if (error.name === 'MongoNetworkError') {
-    statusCode = 503;
-    message = 'Database connection error';
+    const dupError = handleDuplicateKeyError(error);
+    message = dupError.message;
+    details = dupError.details;
   }
 
-  // Send error response
   res.status(statusCode).json({
     success: false,
     message,
@@ -67,12 +79,11 @@ export const errorHandler = (
  */
 const handleValidationError = (error: MongooseError.ValidationError) => {
   const errors: Record<string, string> = {};
-  
-  Object.keys(error.errors).forEach(key => {
-    const validatorError = error.errors[key];
-    errors[key] = validatorError.message;
-  });
-
+  for (const field in error.errors) {
+    if (Object.prototype.hasOwnProperty.call(error.errors, field)) {
+      errors[field] = error.errors[field].message;
+    }
+  }
   return { errors };
 };
 
@@ -80,26 +91,21 @@ const handleValidationError = (error: MongooseError.ValidationError) => {
  * Handle MongoDB duplicate key errors
  */
 const handleDuplicateKeyError = (error: CustomError) => {
-  const field = Object.keys((error as any).keyValue)[0];
-  const value = (error as any).keyValue[field];
-  
-  let message = `${field} already exists`;
-  
-  // Customize message for common fields
-  if (field === 'email') {
-    message = 'Email address is already registered';
-  } else if (field === 'username') {
-    message = 'Username is already taken';
-  }
+  const key = Object.keys(error.keyValue || {})[0];
+  const value = error.keyValue?.[key];
+
+  let message = `${key} already exists`;
+  if (key === 'email') message = 'Email address is already registered';
+  else if (key === 'username') message = 'Username is already taken';
 
   return {
     message,
-    details: { field, value }
+    details: { field: key, value }
   };
 };
 
 /**
- * Handle 404 errors for undefined routes
+ * 404 Not Found handler for undefined routes
  */
 export const notFoundHandler = (
   req: Request,
@@ -112,26 +118,29 @@ export const notFoundHandler = (
 };
 
 /**
- * Async error wrapper to catch promise rejections
+ * Async wrapper to catch errors in async route handlers
  */
-export const asyncHandler = (fn: Function) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+export const asyncHandler = (fn: (...args: any[]) => Promise<any>) => {
+  return (req: Request, res: Response, next: NextFunction) =>
     Promise.resolve(fn(req, res, next)).catch(next);
-  };
 };
 
 /**
- * Custom error class for application-specific errors
+ * Also alias for async handler
+ */
+export const catchAsync = asyncHandler;
+
+/**
+ * Custom error class
  */
 export class AppError extends Error {
   public statusCode: number;
   public isOperational: boolean;
 
-  constructor(message: string, statusCode: number = 500) {
+  constructor(message: string, statusCode = 500) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = true;
-
     Error.captureStackTrace(this, this.constructor);
   }
 }
@@ -140,28 +149,19 @@ export class AppError extends Error {
  * Common error creators
  */
 export const createError = {
-  badRequest: (message: string = 'Bad Request') => new AppError(message, 400),
-  unauthorized: (message: string = 'Unauthorized') => new AppError(message, 401),
-  forbidden: (message: string = 'Forbidden') => new AppError(message, 403),
-  notFound: (message: string = 'Not Found') => new AppError(message, 404),
-  conflict: (message: string = 'Conflict') => new AppError(message, 409),
-  tooManyRequests: (message: string = 'Too Many Requests') => new AppError(message, 429),
-  internal: (message: string = 'Internal Server Error') => new AppError(message, 500),
-  notImplemented: (message: string = 'Not Implemented') => new AppError(message, 501),
-  serviceUnavailable: (message: string = 'Service Unavailable') => new AppError(message, 503)
+  badRequest: (msg = 'Bad Request') => new AppError(msg, 400),
+  unauthorized: (msg = 'Unauthorized') => new AppError(msg, 401),
+  forbidden: (msg = 'Forbidden') => new AppError(msg, 403),
+  notFound: (msg = 'Not Found') => new AppError(msg, 404),
+  conflict: (msg = 'Conflict') => new AppError(msg, 409),
+  tooManyRequests: (msg = 'Too Many Requests') => new AppError(msg, 429),
+  internal: (msg = 'Internal Server Error') => new AppError(msg, 500),
+  notImplemented: (msg = 'Not Implemented') => new AppError(msg, 501),
+  serviceUnavailable: (msg = 'Service Unavailable') => new AppError(msg, 503)
 };
 
 /**
- * Middleware to handle uncaught exceptions in async routes
- */
-export const catchAsync = (fn: Function) => {
-  return (req: Request, res: Response, next: NextFunction) => {
-    fn(req, res, next).catch(next);
-  };
-};
-
-/**
- * Security error handler for suspicious activities
+ * Security error handler - logs only, doesn't respond
  */
 export const securityErrorHandler = (
   error: CustomError,
@@ -169,14 +169,13 @@ export const securityErrorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  // Log security-related errors
-  if (error.statusCode === 401 || error.statusCode === 403) {
-    console.warn(`Security Alert: ${error.message}`, {
+  if ([401, 403].includes(error.statusCode ?? 0)) {
+    console.warn(`🔐 Security Alert: ${error.message}`, {
       ip: req.ip,
-      userAgent: req.get('User-Agent'),
-      url: req.originalUrl,
       method: req.method,
-      timestamp: new Date().toISOString()
+      path: req.originalUrl,
+      userAgent: req.get('User-Agent'),
+      time: new Date().toISOString()
     });
   }
 
@@ -184,7 +183,7 @@ export const securityErrorHandler = (
 };
 
 /**
- * Database error handler
+ * MongoDB connection issue handler
  */
 export const databaseErrorHandler = (
   error: CustomError,
@@ -192,14 +191,13 @@ export const databaseErrorHandler = (
   res: Response,
   next: NextFunction
 ): void => {
-  // Handle database connection errors
-  if (error.name === 'MongoNetworkError' || error.name === 'MongoTimeoutError') {
-    console.error('Database connection error:', error);
-    
+  if (['MongoNetworkError', 'MongoTimeoutError'].includes(error.name)) {
+    console.error('🛑 Database connection issue:', error);
+
     res.status(503).json({
       success: false,
       message: 'Database service temporarily unavailable',
-      retryAfter: 30
+      retryAfter: 30 // seconds
     });
     return;
   }
