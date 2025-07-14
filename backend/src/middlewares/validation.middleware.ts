@@ -259,7 +259,7 @@ export const validateRoomId: ValidationChain[] = [
   param('roomId')
     .notEmpty()
     .withMessage('Room ID is required')
-    .isLength({ min: 10, max: 100 })
+    .isLength({ min: 3, max: 100 })
     .withMessage('Invalid room ID format')
 ];
 
@@ -614,6 +614,26 @@ export const validateProfileUpdate: ValidationChain[] = [
  * Chat message validation
  */
 export const validateChatMessage: ValidationChain[] = [
+  body('message')
+    .notEmpty()
+    .withMessage('Message cannot be empty')
+    .isLength({ max: 500 })
+    .withMessage('Message must be less than 500 characters')
+];
+
+/**
+ * Legacy chat message validation (includes roomId in body)
+ */
+export const validateLegacyChatMessage: ValidationChain[] = [
+  body('roomId')
+    .notEmpty()
+    .withMessage('Room ID is required')
+    .isString()
+    .withMessage('Room ID must be a string')
+    .isLength({ min: 3, max: 50 })
+    .withMessage('Room ID must be between 3 and 50 characters')
+    .matches(/^[a-zA-Z0-9_-]+$/)
+    .withMessage('Room ID can only contain letters, numbers, hyphens, and underscores'),
   body('message')
     .notEmpty()
     .withMessage('Message cannot be empty')

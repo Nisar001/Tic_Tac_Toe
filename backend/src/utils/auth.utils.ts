@@ -1,11 +1,12 @@
-import jwt, { JwtPayload, Secret } from 'jsonwebtoken';
-import crypto from 'crypto';
-import bcrypt from 'bcryptjs';
+import * as jwt from 'jsonwebtoken';
+import { JwtPayload, Secret } from 'jsonwebtoken';
+import * as crypto from 'crypto';
+import * as bcrypt from 'bcrypt';
 import { config } from '../config';
 import { JWTPayload } from '../types';
 
 export class AuthUtils {
-  private static readonly SALT_ROUNDS = 12;
+  private static readonly SALT_ROUNDS = 10;
 
   static generateAccessToken(payload: JWTPayload): string {
     if (!config.JWT_SECRET) {
@@ -102,7 +103,35 @@ export class AuthUtils {
   }
 
   static async comparePassword(password: string, hash: string): Promise<boolean> {
-    return await bcrypt.compare(password, hash);
+    try {
+      // Validate inputs
+      if (!password || !hash) {
+        console.log('❌ Invalid password or hash input');
+        return false;
+      }
+
+      if (typeof password !== 'string' || typeof hash !== 'string') {
+        console.log('❌ Password or hash is not a string');
+        return false;
+      }
+
+      if (hash.length !== 60 || !hash.startsWith('$2')) {
+        console.log('❌ Invalid bcrypt hash format');
+        return false;
+      }
+
+      console.log('🔑 AuthUtils.comparePassword:');
+      console.log('- Password length:', password.length);
+      console.log('- Hash format valid:', /^\$2[aby]\$\d+\$/.test(hash));
+      
+      const result = await bcrypt.compare(password, hash);
+      console.log('- Bcrypt comparison result:', result);
+      
+      return result;
+    } catch (error) {
+      console.error('❌ Password comparison error in AuthUtils:', error);
+      return false;
+    }
   }
 
   static extractTokenFromHeader(authHeader?: string): string | null {
@@ -223,6 +252,126 @@ export class AuthUtils {
 
   static isActionAllowed(lastAction: Date | null, cooldownMs: number): boolean {
     return !lastAction || Date.now() - lastAction.getTime() >= cooldownMs;
+  }
+
+  static async testPasswordHashing(password: string): Promise<{ hash: string; isValid: boolean }> {
+    try {
+      console.log('🧪 Testing password hashing...');
+      const salt = await bcrypt.genSalt(12);
+      const hash = await bcrypt.hash(password, salt);
+      const isValid = await bcrypt.compare(password, hash);
+      
+      console.log('- Generated hash:', hash);
+      console.log('- Hash verification:', isValid);
+      
+      return { hash, isValid };
+    } catch (error) {
+      console.error('❌ Password hashing test error:', error);
+      throw error;
+    }
+  }
+
+  // Debugging helper method to generate a fresh hash for testing
+  static async generateTestHash(password: string): Promise<string> {
+    console.log('🔧 Generating fresh hash for password:', JSON.stringify(password));
+    const salt = await bcrypt.genSalt(12);
+    const hash = await bcrypt.hash(password, salt);
+    console.log('Generated hash:', hash);
+    
+    // Test the hash immediately
+    const testResult = await bcrypt.compare(password, hash);
+    console.log('Fresh hash test result:', testResult);
+    
+    return hash;
+  }
+
+  // Emergency password reset helper for debugging
+  static async createDebugHash(): Promise<void> {
+    console.log('🚨 Creating debug hashes for common passwords...');
+    
+    const testPasswords = [
+      'SecurePass123!',
+      'password123',
+      'admin123',
+      'test123',
+      '123456'
+    ];
+    
+    for (const pwd of testPasswords) {
+      const hash = await bcrypt.hash(pwd, 12);
+      console.log(`Password: "${pwd}" -> Hash: ${hash}`);
+      
+      // Verify each one
+      const isValid = await bcrypt.compare(pwd, hash);
+      console.log(`Verification: ${isValid}\n`);
+    }
+  }
+
+  // Utility method to create a fresh password hash for testing/debugging
+  static async createFreshPasswordHash(plainPassword: string): Promise<{hash: string, testResult: boolean}> {
+    try {
+      console.log('🔧 Creating fresh password hash...');
+      console.log('- Plain password:', plainPassword);
+      
+      const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
+      const hash = await bcrypt.hash(plainPassword, salt);
+      
+      console.log('- Generated hash:', hash);
+      
+      // Test the hash immediately
+      const testResult = await bcrypt.compare(plainPassword, hash);
+      console.log('- Immediate test result:', testResult);
+      
+      return { hash, testResult };
+    } catch (error) {
+      console.error('❌ Error creating fresh hash:', error);
+      throw error;
+    }
+  }
+
+  // TEMPORARY: Emergency password reset method for debugging
+  static async emergencyPasswordReset(email: string, newPassword: string): Promise<boolean> {
+    try {
+      console.log('🚨 EMERGENCY PASSWORD RESET');
+      console.log('- Email:', email);
+      console.log('- New password:', newPassword);
+
+      // Import User model dynamically to avoid circular dependencies
+      const User = (await import('../models/user.model')).default;
+      
+      // Find user
+      const user = await User.findOne({ email: email.toLowerCase() });
+      if (!user) {
+        console.log('❌ User not found');
+        return false;
+      }
+
+      // Generate new hash
+      const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
+      const newHash = await bcrypt.hash(newPassword, salt);
+      
+      console.log('- Generated new hash:', newHash);
+
+      // Test the new hash
+      const testResult = await bcrypt.compare(newPassword, newHash);
+      console.log('- Hash test result:', testResult);
+
+      if (!testResult) {
+        console.log('❌ Hash test failed');
+        return false;
+      }
+
+      // Update user password
+      user.password = newHash;
+      await user.save();
+
+      console.log('✅ Password updated successfully');
+      return true;
+
+    } catch (error) {
+      console.error('❌ Emergency password reset failed:', error);
+      return false;
+    }
   }
 }
 

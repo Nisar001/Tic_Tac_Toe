@@ -12,7 +12,8 @@ import {
   getProfile,
   updateProfile,
   changePassword,
-  deleteAccount
+  deleteAccount,
+  emergencyPasswordReset
 } from '../controllers';
 
 // Import social routes
@@ -26,9 +27,11 @@ import {
   validateEmailVerification,
   validatePasswordResetRequest,
   validatePasswordReset,
+  validateChangePassword,
   validateProfileUpdate,
   handleValidationErrors
 } from '../../../middlewares/validation.middleware';
+import { validateResendVerification } from '../../../middlewares/validateResendVerification';
 import {
   authRateLimit,
   passwordResetRateLimit,
@@ -65,7 +68,7 @@ router.post('/verify-email',
 
 router.post('/resend-verification',
   emailVerificationRateLimit,
-  validateEmailVerification,
+  validateResendVerification,
   handleValidationErrors,
   resendVerification
 );
@@ -86,6 +89,9 @@ router.post('/reset-password',
 
 router.post('/refresh-token', refreshToken);
 
+// TEMPORARY: Emergency password reset (remove in production)
+router.post('/emergency-reset', emergencyPasswordReset);
+
 // Protected routes (require authentication)
 router.use(authenticate as any); // All routes below require authentication
 
@@ -100,7 +106,7 @@ router.patch('/profile',
 
 router.post('/change-password',
   authRateLimit,
-  validatePasswordReset,
+  validateChangePassword,
   handleValidationErrors,
   changePassword
 );

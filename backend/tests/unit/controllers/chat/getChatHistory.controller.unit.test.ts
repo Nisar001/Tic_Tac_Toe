@@ -3,9 +3,12 @@ import { getChatHistory } from '../../../../src/modules/chat/controllers/getChat
 import { AuthenticatedRequest } from '../../../../src/middlewares/auth.middleware';
 
 // Mock dependencies
-jest.mock('../../../../src/models/chatMessage.model');
+jest.mock('../../../../src/models/chatMessage.model', () => ({
+  __esModule: true,
+  default: jest.fn()
+}));
 
-const ChatMessage = require('../../../../src/models/chatMessage.model');
+import ChatMessage from '../../../../src/models/chatMessage.model';
 
 describe('GetChatHistory Controller', () => {
   let mockRequest: Partial<AuthenticatedRequest>;

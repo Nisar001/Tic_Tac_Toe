@@ -127,7 +127,7 @@ export class SchedulerService {
 
   private static startEnergyRegeneration(): void {
     this.energyRegenJob = cron.schedule('* * * * *', async () => {
-      await this.executeJobWithMonitoring('energyRegeneration', this.processEnergyRegeneration);
+      await this.executeJobWithMonitoring('energyRegeneration', () => this.processEnergyRegeneration());
     }, {
       scheduled: true,
       timezone: "UTC"
@@ -137,21 +137,21 @@ export class SchedulerService {
 
   private static startDatabaseCleanup(): void {
     this.cleanupJob = cron.schedule('0 2 * * *', async () => {
-      await this.executeJobWithMonitoring('databaseCleanup', this.performDatabaseCleanup);
+      await this.executeJobWithMonitoring('databaseCleanup', () => this.performDatabaseCleanup());
     });
     console.log('🧹 Database cleanup job started');
   }
 
   private static startStatsCalculation(): void {
     this.statsJob = cron.schedule('0 */6 * * *', async () => {
-      await this.executeJobWithMonitoring('statsCalculation', this.calculateGlobalStats);
+      await this.executeJobWithMonitoring('statsCalculation', () => this.calculateGlobalStats());
     });
     console.log('📊 Stats calculation job started');
   }
 
   private static startNotificationSystem(): void {
     this.notificationJob = cron.schedule('0 * * * *', async () => {
-      await this.executeJobWithMonitoring('notificationSystem', this.processNotifications);
+      await this.executeJobWithMonitoring('notificationSystem', () => this.processNotifications());
     }, {
       scheduled: true,
       timezone: "UTC"
@@ -161,7 +161,7 @@ export class SchedulerService {
 
   private static startSecurityMonitoring(): void {
     this.securityJob = cron.schedule('*/5 * * * *', async () => {
-      await this.executeJobWithMonitoring('securityMonitoring', this.performSecurityCheck);
+      await this.executeJobWithMonitoring('securityMonitoring', () => this.performSecurityCheck());
     }, {
       scheduled: true,
       timezone: "UTC"
@@ -203,7 +203,12 @@ export class SchedulerService {
       }
     }
 
-    await this.sendEnergyNotifications(notificationsToSend);
+    // Send notifications with error handling
+    try {
+      await this.sendEnergyNotifications(notificationsToSend);
+    } catch (error) {
+      console.error('Failed to send energy notifications:', error);
+    }
 
     if (updatedCount > 0) {
       console.log(`⚡ Regenerated energy for ${updatedCount} users`);

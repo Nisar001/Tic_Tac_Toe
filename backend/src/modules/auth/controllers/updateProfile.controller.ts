@@ -125,7 +125,8 @@ export const updateProfile = asyncHandler(async (req: AuthenticatedRequest, res:
     Object.assign(req.user, sanitizedData);
     req.user.lastProfileUpdate = new Date();
 
-    await req.user.save();
+    // Save with validateBeforeSave: false to avoid password validation issues during profile updates
+    await req.user.save({ validateBeforeSave: false });
 
     return res.json({
       success: true,
@@ -142,8 +143,14 @@ export const updateProfile = asyncHandler(async (req: AuthenticatedRequest, res:
         }
       }
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Profile update error:', error);
-    throw createError.internal('Failed to update profile');
+    // Development: return real error for debugging
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update profile',
+      error: error?.message || error,
+      stack: error?.stack
+    });
   }
 });

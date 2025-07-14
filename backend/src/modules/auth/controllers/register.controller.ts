@@ -19,29 +19,33 @@ export const registrationRateLimit = rateLimit({
 });
 
 export const register = asyncHandler(async (req: Request, res: Response) => {
-  try {
-    const { username, email, password, phoneNumber, dateOfBirth } = req.body;
+  const { username, email, password, confirmPassword, phoneNumber, dateOfBirth } = req.body;
 
-    // Required fields check
-    if (!username || !email || !password) {
-      throw createError.badRequest('Username, email, and password are required');
-    }
+  // Required fields check
+  if (!username || !email || !password) {
+    throw createError.badRequest('Username, email, and password are required');
+  }
 
-    // Sanitize and validate inputs
-    const sanitizedUsername = AuthUtils.validateAndSanitizeInput(username, 20);
-    const sanitizedEmail = email.trim().toLowerCase();
-    const sanitizedPhoneNumber = phoneNumber
-      ? AuthUtils.validateAndSanitizeInput(phoneNumber, 20)
-      : undefined;
+  // Confirm password check (only if provided)
+  if (confirmPassword && password !== confirmPassword) {
+    throw createError.badRequest('Passwords do not match');
+  }
 
-    const usernameValidation = AuthUtils.isValidUsernameSecure(sanitizedUsername);
-    if (!usernameValidation.valid) {
-      throw createError.badRequest(usernameValidation.reason!);
-    }
+  // Sanitize and validate inputs
+  const sanitizedUsername = AuthUtils.validateAndSanitizeInput(username, 20);
+  const sanitizedEmail = email.trim().toLowerCase();
+  const sanitizedPhoneNumber = phoneNumber
+    ? AuthUtils.validateAndSanitizeInput(phoneNumber, 20)
+    : undefined;
 
-    if (!AuthUtils.isValidEmail(sanitizedEmail)) {
-      throw createError.badRequest('Please provide a valid email address');
-    }
+  const usernameValidation = AuthUtils.isValidUsernameSecure(sanitizedUsername);
+  if (!usernameValidation.valid) {
+    throw createError.badRequest(usernameValidation.reason!);
+  }
+
+  if (!AuthUtils.isValidEmail(sanitizedEmail)) {
+    throw createError.badRequest('Please provide a valid email address');
+  }
 
     if (AuthUtils.isSuspiciousEmail(sanitizedEmail)) {
       throw createError.badRequest('Invalid email format');
@@ -124,17 +128,18 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
     }
 
     // Response
-    return res.status(201).json({
+    res.status(201).json({
       success: true,
-      message: 'User registered successfully. Please verify your email.',
+      message: 'User registered successfully. Please check your email for verification.',
       data: {
-        userId: user._id,
-        email: user.email,
-        username: user.username,
+        user: {
+          _id: user._id,
+          userId: user._id,
+          email: user.email,
+          username: user.username,
+          isEmailVerified: user.isEmailVerified
+        },
         verificationSent: true
       }
     });
-  } catch (error) {
-    throw createError.internal((error as Error).message || 'Registration failed');
-  }
 });

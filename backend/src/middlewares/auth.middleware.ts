@@ -228,7 +228,9 @@ function recordAuthAttempt(clientIP: string, success: boolean): void {
 setInterval(() => {
   try {
     const now = new Date();
-    for (const [ip, { lastAttempt }] of authAttempts.entries()) {
+    // Convert to array first to avoid iterator issues
+    const entries = Array.from(authAttempts.entries());
+    for (const [ip, { lastAttempt }] of entries) {
       if (now.getTime() - lastAttempt.getTime() > AUTH_WINDOW_MS * 2) {
         authAttempts.delete(ip);
       }

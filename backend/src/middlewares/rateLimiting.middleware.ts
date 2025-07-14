@@ -47,7 +47,7 @@ export const generalRateLimit = rateLimit({
  */
 export const authRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: process.env.NODE_ENV === 'development' ? 100 : 5, // Increased for development
   skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
@@ -66,7 +66,7 @@ export const authRateLimit = rateLimit({
  */
 export const passwordResetRateLimit = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 3,
+  max: process.env.NODE_ENV === 'development' ? 20 : 3, // Increased for development
   standardHeaders: true,
   legacyHeaders: false,
   message: createMessage(
@@ -84,7 +84,7 @@ export const passwordResetRateLimit = rateLimit({
  */
 export const emailVerificationRateLimit = rateLimit({
   windowMs: 5 * 60 * 1000,
-  max: 3,
+  max: process.env.NODE_ENV === 'development' ? 20 : 3, // Increased for development
   standardHeaders: true,
   legacyHeaders: false,
   message: createMessage(

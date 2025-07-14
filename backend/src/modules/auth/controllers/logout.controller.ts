@@ -26,7 +26,7 @@ export const logout = asyncHandler(async (req: AuthenticatedRequest, res: Respon
 
   // Save only if token was found and removed
   if (req.user.refreshTokens.length !== originalCount) {
-    await req.user.save();
+    await req.user.save({ validateBeforeSave: false });
   }
 
   res.status(200).json({

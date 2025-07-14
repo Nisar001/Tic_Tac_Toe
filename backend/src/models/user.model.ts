@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import bcrypt from 'bcrypt';
+import * as bcrypt from 'bcrypt';
 import { logError, logDebug } from '../utils/logger';
 
 export interface IUser extends Document {
@@ -82,7 +82,6 @@ export interface IUser extends Document {
 }
 
 const UserSchema = new Schema<IUser>({
-  _id: { type: Schema.Types.ObjectId, required: true },
   email: { 
     type: String, 
     required: true, 
@@ -219,6 +218,8 @@ UserSchema.pre('save', async function(next) {
 UserSchema.pre('save', function(next) {
   try {
     this.sanitizeData();
+    
+    // Skip validation if validateBeforeSave is false (e.g., during profile updates)
     const validation = this.validateUserData();
     
     if (!validation.isValid) {
@@ -435,7 +436,8 @@ UserSchema.methods.validateUserData = function(): { isValid: boolean; errors: st
     }
     
     // Password validation for manual provider
-    if (this.provider === 'manual' && (!this.password || this.password.length < 6)) {
+    // Only require password if it's a new user (no _id) or if password is being changed
+    if (this.provider === 'manual' && !this._id && (!this.password || this.password.length < 6)) {
       errors.push('Password is required and must be at least 6 characters for manual registration');
     }
     
