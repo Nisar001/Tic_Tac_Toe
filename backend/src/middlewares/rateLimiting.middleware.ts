@@ -34,10 +34,10 @@ export const generalRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many requests, please try again later',
-    Math.ceil(config.RATE_LIMIT.WINDOW_MS / 1000)
+    5
   ),
   handler: rateLimitHandler(
-    Math.ceil(config.RATE_LIMIT.WINDOW_MS / 1000),
+    5,
     'Too many requests, please try again later'
   )
 });
@@ -53,10 +53,10 @@ export const authRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many authentication attempts, please try again later',
-    900
+    5
   ),
   handler: rateLimitHandler(
-    900,
+    5,
     'Too many authentication attempts, please try again later'
   )
 });
@@ -71,10 +71,10 @@ export const passwordResetRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many password reset requests, please try again later',
-    3600
+    5
   ),
   handler: rateLimitHandler(
-    3600,
+    5,
     'Too many password reset requests, please try again later'
   )
 });
@@ -89,10 +89,10 @@ export const emailVerificationRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many verification requests, please try again later',
-    300
+    5
   ),
   handler: rateLimitHandler(
-    300,
+    5,
     'Too many verification requests, please try again later'
   )
 });
@@ -107,10 +107,10 @@ export const gameCreationRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many game creation requests, please slow down',
-    60
+    5
   ),
   handler: rateLimitHandler(
-    60,
+    5,
     'Too many game creation requests, please slow down'
   )
 });
@@ -125,10 +125,10 @@ export const chatRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many messages, please slow down',
-    60
+    5
   ),
   handler: rateLimitHandler(
-    60,
+    5,
     'Too many messages, please slow down'
   )
 });
@@ -143,10 +143,10 @@ export const friendRequestRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many friend requests, please try again later',
-    3600
+    5
   ),
   handler: rateLimitHandler(
-    3600,
+    5,
     'Too many friend requests, please try again later'
   )
 });
@@ -161,10 +161,10 @@ export const profileUpdateRateLimit = rateLimit({
   legacyHeaders: false,
   message: createMessage(
     'Too many profile updates, please try again later',
-    3600
+    5
   ),
   handler: rateLimitHandler(
-    3600,
+    5,
     'Too many profile updates, please try again later'
   )
 });
@@ -188,10 +188,10 @@ export const createDynamicRateLimit = (
     legacyHeaders: false,
     message: createMessage(
       'Rate limit exceeded, please try again later',
-      Math.ceil(windowMs / 1000)
+      5
     ),
     handler: rateLimitHandler(
-      Math.ceil(windowMs / 1000),
+      5,
       'Rate limit exceeded, please try again later'
     )
   });

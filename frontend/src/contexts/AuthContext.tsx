@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { apiClient } from '../services/api';
-import { STORAGE_KEYS, API_ENDPOINTS } from '../constants';
+import authAPI from '../services/auth';
+import { STORAGE_KEYS } from '../constants';
 import {
   AuthContextType,
   User,
@@ -76,7 +76,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   useEffect(() => {
     initializeAuth();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initializeAuth = async () => {
     try {
@@ -100,8 +100,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         // Verify token validity by fetching user profile
         try {
-          const response = await apiClient.get(API_ENDPOINTS.PROFILE);
-          if (response.success && response.data) {
+          const response = await authAPI.getProfile();
+          if (response.data) {
             dispatch({ type: 'SET_USER', payload: response.data });
           }
         } catch (error) {
@@ -121,15 +121,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post(API_ENDPOINTS.LOGIN, credentials);
+      const response = await authAPI.login(credentials);
       
-      if (response.success && response.data) {
-        const { user, tokens } = response.data;
+      if (response.data) {
+        const { user, token, refreshToken } = response.data;
+        
+        const tokens = {
+          accessToken: token,
+          refreshToken: refreshToken || '',
+          expiresIn: 3600, // Default 1 hour
+        };
         
         // Store in localStorage
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, tokens.accessToken);
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, tokens.refreshToken);
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+        if (refreshToken) {
+          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+        }
         
         // Update state
         dispatch({ type: 'SET_USER', payload: user });
@@ -150,9 +158,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post(API_ENDPOINTS.REGISTER, credentials);
+      const response = await authAPI.register(credentials);
       
-      if (response.success) {
+      if (response.data) {
         toast.success('Account created successfully! Please check your email for verification.');
       }
     } catch (error: any) {
@@ -166,7 +174,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await apiClient.post(API_ENDPOINTS.LOGOUT);
+      await authAPI.logout();
     } catch (error) {
       console.error('Logout error:', error);
     } finally {
@@ -180,19 +188,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (!refreshToken) throw new Error('No refresh token available');
 
-      const response = await apiClient.post(API_ENDPOINTS.REFRESH_TOKEN, {
-        refreshToken,
-      });
+      const response = await authAPI.refreshToken();
 
-      if (response.success && response.data) {
-        const { accessToken } = response.data;
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+      if (response.data) {
+        const { token, refreshToken: newRefreshToken } = response.data;
+        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
+        if (newRefreshToken) {
+          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);
+        }
         
         dispatch({
           type: 'SET_TOKENS',
           payload: {
-            accessToken,
-            refreshToken,
+            accessToken: token,
+            refreshToken: newRefreshToken || refreshToken,
             expiresIn: 3600,
           },
         });
@@ -207,9 +216,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.patch(API_ENDPOINTS.PROFILE, data);
+      const response = await authAPI.updateProfile(data);
       
-      if (response.success && response.data) {
+      if (response.data) {
         const updatedUser = response.data;
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
         dispatch({ type: 'UPDATE_USER', payload: updatedUser });
@@ -228,9 +237,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post(API_ENDPOINTS.CHANGE_PASSWORD, credentials);
+      const response = await authAPI.changePassword(credentials);
       
-      if (response.success) {
+      if (response.data) {
         toast.success('Password changed successfully!');
       }
     } catch (error: any) {
@@ -242,13 +251,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const verifyEmail = async (token: string) => {
+  const verifyEmail = async (email: string, code: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post(API_ENDPOINTS.VERIFY_EMAIL, { token });
+      const response = await authAPI.verifyEmail({ email, code });
       
-      if (response.success) {
+      if (response.data) {
         if (state.user) {
           dispatch({
             type: 'UPDATE_USER',
@@ -266,11 +275,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const resendVerification = async () => {
+  const resendVerification = async (email: string) => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.RESEND_VERIFICATION);
+      const response = await authAPI.resendVerification(email);
       
-      if (response.success) {
+      if (response.data) {
         toast.success('Verification email sent!');
       }
     } catch (error: any) {
@@ -282,9 +291,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const requestPasswordReset = async (email: string) => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.FORGOT_PASSWORD, { email });
+      const response = await authAPI.requestPasswordReset({ email });
       
-      if (response.success) {
+      if (response.data) {
         toast.success('Password reset email sent!');
       }
     } catch (error: any) {
@@ -296,9 +305,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const resetPassword = async (credentials: ResetPasswordCredentials) => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.RESET_PASSWORD, credentials);
+      const response = await authAPI.resetPassword(credentials);
       
-      if (response.success) {
+      if (response.data) {
         toast.success('Password reset successfully!');
       }
     } catch (error: any) {

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChatMessage as ChatMessageType } from '../../services/chat';
+import { ChatMessage as ChatMessageType } from '../../types';
 import { ChatHeader } from './ChatHeader';
 import { ChatMessage } from './ChatMessage';
 import { ChatInput } from './ChatInput';
@@ -80,7 +80,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             <ChatMessage
               key={msg.id}
               message={msg}
-              isOwn={msg.senderId === currentUserId}
+              isOwn={msg.userId === currentUserId}
             />
           ))
         )}

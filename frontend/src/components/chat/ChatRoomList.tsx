@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChatRoom as ChatRoomType } from '../../services/chat';
+import { ChatRoom as ChatRoomType } from '../../types';
 import { FaHashtag, FaUsers, FaCircle } from 'react-icons/fa';
 
 interface ChatRoomListProps {
@@ -16,111 +16,103 @@ export const ChatRoomList: React.FC<ChatRoomListProps> = ({
   onlineUsers,
 }) => {
   const formatLastMessage = (room: ChatRoomType) => {
-    if (!room.lastMessage) return 'No messages yet';
+    if (!room.lastMessage) return { content: 'No messages yet', time: '' };
     
-    const { content, createdAt } = room.lastMessage;
-    const time = new Date(createdAt).toLocaleTimeString([], { 
-      hour: '2-digit', 
-      minute: '2-digit' 
+    const { message, timestamp } = room.lastMessage;
+    const time = new Date(timestamp).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
     });
     
     return {
-      content: content.length > 30 ? `${content.substring(0, 30)}...` : content,
+      content: message.length > 30 ? `${message.substring(0, 30)}...` : message,
       time,
     };
   };
 
-  const getRoomTypeIcon = (type: string) => {
-    switch (type) {
+  const getRoomIcon = (room: ChatRoomType) => {
+    switch (room.type) {
       case 'game':
-        return <FaCircle className="text-green-500" />;
-      case 'direct':
-        return <FaCircle className="text-blue-500" />;
-      case 'group':
-        return <FaHashtag className="text-purple-500" />;
+        return <FaUsers className="w-4 h-4" />;
+      case 'private':
+        return <FaCircle className="w-4 h-4" />;
       default:
-        return <FaHashtag className="text-gray-500" />;
+        return <FaHashtag className="w-4 h-4" />;
     }
   };
 
-  if (rooms.length === 0) {
-    return (
-      <div className="p-4 text-center text-gray-500">
-        <FaUsers className="mx-auto text-4xl mb-2" />
-        <p>No chat rooms available</p>
-      </div>
-    );
-  }
+  const getOnlineCount = (roomId: string) => {
+    return onlineUsers[roomId]?.length || 0;
+  };
 
   return (
-    <div className="space-y-1 p-2">
-      {rooms.map((room) => {
-        const isActive = room.id === activeRoom;
-        const onlineCount = onlineUsers[room.id]?.length || 0;
-        const lastMessage = formatLastMessage(room);
-        
-        return (
-          <div
-            key={room.id}
-            onClick={() => onRoomSelect(room.id)}
-            className={`
-              p-3 rounded-lg cursor-pointer transition-all duration-200
-              ${isActive 
-                ? 'bg-blue-100 border-l-4 border-blue-500' 
-                : 'hover:bg-gray-100'
-              }
-            `}
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center space-x-2 flex-1 min-w-0">
-                {getRoomTypeIcon(room.type)}
-                <div className="flex-1 min-w-0">
+    <div className="bg-white rounded-lg shadow-sm border">
+      <div className="p-4 border-b">
+        <h3 className="text-lg font-semibold text-gray-800">Chat Rooms</h3>
+      </div>
+      
+      <div className="max-h-96 overflow-y-auto">
+        {rooms.length === 0 ? (
+          <div className="p-4 text-center text-gray-500">
+            No chat rooms available
+          </div>
+        ) : (
+          <div className="space-y-1 p-2">
+            {rooms.map((room) => {
+              const isActive = activeRoom === room.id;
+              const onlineCount = getOnlineCount(room.id);
+              const lastMessage = formatLastMessage(room);
+              
+              return (
+                <div
+                  key={room.id}
+                  onClick={() => onRoomSelect(room.id)}
+                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                    isActive
+                      ? 'bg-blue-50 border-blue-200'
+                      : 'hover:bg-gray-50'
+                  }`}
+                >
                   <div className="flex items-center justify-between">
-                    <h4 className={`
-                      font-medium truncate
-                      ${isActive ? 'text-blue-900' : 'text-gray-900'}
-                    `}>
-                      {room.name}
-                    </h4>
-                    {typeof lastMessage === 'object' && lastMessage.time && (
-                      <span className="text-xs text-gray-500 ml-2">
-                        {lastMessage.time}
-                      </span>
-                    )}
-                  </div>
-                  
-                  <p className={`
-                    text-sm truncate mt-1
-                    ${isActive ? 'text-blue-700' : 'text-gray-600'}
-                  `}>
-                    {typeof lastMessage === 'object' ? lastMessage.content : lastMessage}
-                  </p>
-                  
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center space-x-1 text-xs text-gray-500">
-                      <FaUsers className="text-xs" />
-                      <span>{room.participants.length}</span>
-                      {onlineCount > 0 && (
-                        <>
-                          <span>•</span>
-                          <FaCircle className="text-green-500 text-xs" />
-                          <span>{onlineCount} online</span>
-                        </>
-                      )}
-                    </div>
-                    
-                    {room.type === 'game' && (
-                      <div className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">
-                        Game Chat
+                    <div className="flex items-center space-x-3">
+                      <div className={`${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
+                        {getRoomIcon(room)}
                       </div>
-                    )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center space-x-2">
+                          <h4 className={`font-medium truncate ${
+                            isActive ? 'text-blue-900' : 'text-gray-900'
+                          }`}>
+                            {room.name}
+                          </h4>
+                          {onlineCount > 0 && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              {onlineCount}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-sm text-gray-500 truncate">
+                            {lastMessage.content}
+                          </p>
+                          {lastMessage.time && (
+                            <span className="text-xs text-gray-400 ml-2">
+                              {lastMessage.time}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
-        );
-      })}
+        )}
+      </div>
     </div>
   );
 };
+
+export default ChatRoomList;

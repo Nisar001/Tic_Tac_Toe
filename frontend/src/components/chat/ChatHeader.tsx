@@ -1,6 +1,6 @@
 import React from 'react';
 import { FaCircle, FaUsers, FaHashtag } from 'react-icons/fa';
-import { ChatRoom } from '../../services/chat';
+import { ChatRoom } from '../../types';
 
 interface ChatHeaderProps {
   room?: ChatRoom;

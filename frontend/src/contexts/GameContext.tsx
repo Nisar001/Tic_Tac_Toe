@@ -1,12 +1,11 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { apiClient } from '../services/api';
-import * as gameApi from '../services/game';
+import gameAPI from '../services/game';
 import { useSocket } from './SocketContext';
-import { SOCKET_EVENTS, API_ENDPOINTS } from '../constants';
+import { SOCKET_EVENTS } from '../constants';
 import {
   GameContextType,
   Game,
-  GameCreateRequest,
+  CreateGameRequest,
   GameMoveRequest,
   UserStats,
   LeaderboardEntry,
@@ -77,35 +76,35 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const { socket, on, off } = useSocket();
 
   useEffect(() => {
-    if (socket) {
-      setupSocketListeners();
-    }
+    if (!socket) return;
+
+    const setupSocketListeners = () => {
+      // Game events
+      on(SOCKET_EVENTS.GAME_CREATED, handleGameCreated);
+      on(SOCKET_EVENTS.GAME_JOINED, handleGameJoined);
+      on(SOCKET_EVENTS.GAME_STATE_UPDATE, handleGameStateUpdate);
+      on(SOCKET_EVENTS.GAME_ENDED, handleGameEnded);
+      on(SOCKET_EVENTS.PLAYER_JOINED, handlePlayerJoined);
+      on(SOCKET_EVENTS.PLAYER_LEFT, handlePlayerLeft);
+      on(SOCKET_EVENTS.GAME_ERROR, handleGameError);
+    };
+
+    const cleanupSocketListeners = () => {
+      off(SOCKET_EVENTS.GAME_CREATED, handleGameCreated);
+      off(SOCKET_EVENTS.GAME_JOINED, handleGameJoined);
+      off(SOCKET_EVENTS.GAME_STATE_UPDATE, handleGameStateUpdate);
+      off(SOCKET_EVENTS.GAME_ENDED, handleGameEnded);
+      off(SOCKET_EVENTS.PLAYER_JOINED, handlePlayerJoined);
+      off(SOCKET_EVENTS.PLAYER_LEFT, handlePlayerLeft);
+      off(SOCKET_EVENTS.GAME_ERROR, handleGameError);
+    };
+
+    setupSocketListeners();
 
     return () => {
       cleanupSocketListeners();
     };
-  }, [socket]);
-
-  const setupSocketListeners = () => {
-    // Game events
-    on(SOCKET_EVENTS.GAME_CREATED, handleGameCreated);
-    on(SOCKET_EVENTS.GAME_JOINED, handleGameJoined);
-    on(SOCKET_EVENTS.GAME_STATE_UPDATE, handleGameStateUpdate);
-    on(SOCKET_EVENTS.GAME_ENDED, handleGameEnded);
-    on(SOCKET_EVENTS.PLAYER_JOINED, handlePlayerJoined);
-    on(SOCKET_EVENTS.PLAYER_LEFT, handlePlayerLeft);
-    on(SOCKET_EVENTS.GAME_ERROR, handleGameError);
-  };
-
-  const cleanupSocketListeners = () => {
-    off(SOCKET_EVENTS.GAME_CREATED, handleGameCreated);
-    off(SOCKET_EVENTS.GAME_JOINED, handleGameJoined);
-    off(SOCKET_EVENTS.GAME_STATE_UPDATE, handleGameStateUpdate);
-    off(SOCKET_EVENTS.GAME_ENDED, handleGameEnded);
-    off(SOCKET_EVENTS.PLAYER_JOINED, handlePlayerJoined);
-    off(SOCKET_EVENTS.PLAYER_LEFT, handlePlayerLeft);
-    off(SOCKET_EVENTS.GAME_ERROR, handleGameError);
-  };
+  }, [socket, on, off]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGameCreated = (data: { game: Game }) => {
     dispatch({ type: 'SET_CURRENT_GAME', payload: data.game });
@@ -153,13 +152,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     toast.error(data.message);
   };
 
-  const createGame = async (request: GameCreateRequest): Promise<Game> => {
+  const createGame = async (request: CreateGameRequest): Promise<Game> => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post(API_ENDPOINTS.CREATE_GAME, request);
+      const response = await gameAPI.createGame(request);
       
-      if (response.success && response.data) {
+      if (response.data) {
         return response.data as Game;
       }
       throw new Error('Failed to create game');
@@ -176,9 +175,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await apiClient.post(`/game/join/${roomId}`);
+      const response = await gameAPI.joinGame(roomId);
       
-      if (response.success) {
+      if (response.data) {
         // Game join will be handled by socket event
         return response.data;
       }
@@ -194,8 +193,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // Replace makeMove to use REST API
   const makeMove = async (request: GameMoveRequest) => {
     try {
-      const response = await gameApi.makeMove(request.roomId, request.position.row, request.position.col);
-      if (response.data && response.data.success) {
+      const response = await gameAPI.makeMove(request.roomId, {
+        row: request.position.row,
+        col: request.position.col
+      });
+      if (response.data) {
         // Optionally update state here if not using sockets
         return response.data;
       }
@@ -209,9 +211,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const forfeitGame = async (roomId: string) => {
     try {
-      const response = await apiClient.post(API_ENDPOINTS.FORFEIT_GAME.replace(':roomId', roomId));
+      const response = await gameAPI.forfeitGame(roomId);
       
-      if (response.success) {
+      if (response.data) {
         toast.success('Game forfeited');
         return response.data;
       }
@@ -224,9 +226,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const getGameState = async (roomId: string): Promise<Game> => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.GET_GAME_STATE.replace(':roomId', roomId));
+      const response = await gameAPI.getGameState(roomId);
       
-      if (response.success && response.data) {
+      if (response.data) {
         return response.data;
       }
       throw new Error('Failed to get game state');
@@ -239,9 +241,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const getActiveGames = async (): Promise<Game[]> => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.GET_ACTIVE_GAMES);
+      const response = await gameAPI.getActiveGames();
       
-      if (response.success && response.data) {
+      if (response.data) {
         dispatch({ type: 'SET_GAMES', payload: response.data });
         return response.data;
       }
@@ -254,9 +256,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const getUserStats = async (): Promise<UserStats> => {
     try {
-      const response = await apiClient.get(API_ENDPOINTS.GET_GAME_STATS);
+      const response = await gameAPI.getUserGameStats();
       
-      if (response.success && response.data) {
+      if (response.data) {
         return response.data;
       }
       throw new Error('Failed to get user stats');
@@ -269,10 +271,11 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const getLeaderboard = async (page = 1, limit = 10): Promise<LeaderboardEntry[]> => {
     try {
-      const response = await apiClient.get(`${API_ENDPOINTS.GET_LEADERBOARD}?page=${page}&limit=${limit}`);
+      const response = await gameAPI.getLeaderboard(page, limit);
       
-      if (response.success && response.data) {
-        return response.data;
+      if (response.data) {
+        // Extract the entries array from the leaderboard response
+        return response.data.entries || [];
       }
       return [];
     } catch (error: any) {

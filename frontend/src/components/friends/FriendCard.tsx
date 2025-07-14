@@ -1,5 +1,5 @@
 import React from 'react';
-import { Friend } from '../../services/friends';
+import { Friend } from '../../types';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FaCircle, FaEllipsisV, FaComments, FaUserMinus } from 'react-icons/fa';
 
@@ -49,7 +49,7 @@ export const FriendCard: React.FC<FriendCardProps> = ({
         <div className="flex items-center space-x-3">
           <div className="relative">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
-              {friend.username.charAt(0).toUpperCase()}
+              {friend.user.username.charAt(0).toUpperCase()}
             </div>
             <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
               isOnline ? 'bg-green-500' : 'bg-gray-400'
@@ -57,7 +57,7 @@ export const FriendCard: React.FC<FriendCardProps> = ({
           </div>
           
           <div>
-            <h4 className="font-semibold text-gray-900">{friend.username}</h4>
+            <h4 className="font-semibold text-gray-900">{friend.user.username}</h4>
             <div className="flex items-center text-sm text-gray-500">
               <FaCircle className={`w-2 h-2 mr-1 ${isOnline ? 'text-green-500' : 'text-gray-400'}`} />
               {isOnline ? 'Online' : 'Offline'}
@@ -99,11 +99,11 @@ export const FriendCard: React.FC<FriendCardProps> = ({
       {/* Friend Stats */}
       <div className="grid grid-cols-2 gap-4 text-center text-sm">
         <div>
-          <div className="font-semibold text-gray-900">{Math.round(friend.winRate * 100)}%</div>
+          <div className="font-semibold text-gray-900">{Math.round((friend.user.stats?.wins || 0) / Math.max(friend.user.stats?.gamesPlayed || 1, 1) * 100)}%</div>
           <div className="text-gray-500">Win Rate</div>
         </div>
         <div>
-          <div className="font-semibold text-gray-900">{friend.gamesPlayed}</div>
+          <div className="font-semibold text-gray-900">{friend.user.stats?.gamesPlayed || 0}</div>
           <div className="text-gray-500">Games</div>
         </div>
       </div>

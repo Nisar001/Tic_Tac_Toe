@@ -110,14 +110,14 @@ export const config = {
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
   RATE_LIMIT: {
-    WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'),
-    MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100')
+    WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900'),
+    MAX_REQUESTS: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '1000')
   },
 
   SECURITY: {
     BCRYPT_ROUNDS: parseInt(process.env.BCRYPT_ROUNDS || '12'),
     MAX_LOGIN_ATTEMPTS: parseInt(process.env.MAX_LOGIN_ATTEMPTS || '5'),
-    LOCK_TIME: parseInt(process.env.LOCK_TIME || '3600000'),
+    LOCK_TIME: parseInt(process.env.LOCK_TIME || '3600'),
     PASSWORD_MIN_LENGTH: parseInt(process.env.PASSWORD_MIN_LENGTH || '8'),
     ADMIN_API_KEY: process.env.ADMIN_API_KEY || 'admin-api-key-change-in-production'
   },

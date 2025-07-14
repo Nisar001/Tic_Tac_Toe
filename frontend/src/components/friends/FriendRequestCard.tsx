@@ -1,5 +1,5 @@
 import React from 'react';
-import { FriendRequest } from '../../services/friends';
+import { FriendRequest } from '../../types';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FaCheck, FaTimes, FaClock } from 'react-icons/fa';
 
@@ -37,8 +37,8 @@ export const FriendRequestCard: React.FC<FriendRequestCardProps> = ({
   };
 
   const displayUser = type === 'received' 
-    ? { username: request.senderUsername, email: request.senderEmail, avatar: request.senderAvatar }
-    : { username: request.senderUsername, email: request.senderEmail, avatar: request.senderAvatar }; // For sent requests, we'd need receiver info
+    ? request.sender 
+    : request.recipient;
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
@@ -60,13 +60,8 @@ export const FriendRequestCard: React.FC<FriendRequestCardProps> = ({
             </div>
             <p className="text-sm text-gray-500">{displayUser.email}</p>
             <p className="text-xs text-gray-400 mt-1">
-              {formatDate(request.createdAt)}
+              {formatDate(request.sentAt)}
             </p>
-            {request.message && (
-              <p className="text-sm text-gray-600 mt-2 italic">
-                "{request.message}"
-              </p>
-            )}
           </div>
         </div>
 

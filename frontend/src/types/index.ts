@@ -1,29 +1,48 @@
+// Basic type definitions
+export type GameStatus = 'waiting' | 'in_progress' | 'completed' | 'abandoned';
+export type GameType = 'quick' | 'ranked' | 'custom' | 'tournament';
+export type Difficulty = 'easy' | 'medium' | 'hard';
+export type CellValue = '' | 'X' | 'O';
+export type WinCondition = 'row' | 'column' | 'diagonal' | 'none';
+
 export interface User {
   id: string;
+  _id?: string;
   username: string;
   email: string;
+  avatar?: string;
   profilePicture?: string;
   isEmailVerified: boolean;
   energy: number;
   maxEnergy: number;
-  energyRegenRate: number;
-  lastEnergyUpdate: string;
+  energyUpdatedAt?: string;
+  lastEnergyUpdate?: string;
+  lastEnergyRegenTime?: string;
+  level: number;
+  xp?: number;
+  totalXP?: number;
   stats: UserStats;
-  preferences: UserPreferences;
+  preferences?: UserPreferences;
+  provider?: 'manual' | 'google' | 'facebook' | 'instagram' | 'twitter';
+  isOnline?: boolean;
+  lastSeen?: string;
+  bio?: string;
+  phoneNumber?: string;
+  dateOfBirth?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface UserStats {
   gamesPlayed: number;
-  gamesWon: number;
-  gamesLost: number;
-  gamesDraw: number;
+  wins: number;
+  losses: number;
+  draws: number;
   winRate: number;
-  currentStreak: number;
-  longestStreak: number;
-  totalScore: number;
-  averageGameDuration: number;
+  currentStreak?: number;
+  longestStreak?: number;
+  totalScore?: number;
+  averageGameDuration?: number;
   rank?: string;
   ranking?: number;
 }
@@ -38,39 +57,55 @@ export interface UserPreferences {
 
 export interface Game {
   id: string;
-  roomId: string;
+  _id?: string;
+  gameId?: string;
+  room: string;
+  roomId?: string; // Alias for room
   status: GameStatus;
   board: CellValue[][];
-  currentPlayer: string;
-  players: GamePlayer[];
+  currentPlayer: 'X' | 'O';
+  players: {
+    player1: GamePlayer;
+    player2?: GamePlayer;
+  };
   winner?: string;
   winCondition?: WinCondition;
+  result?: 'win' | 'draw' | 'abandoned' | null;
   moves: GameMove[];
-  gameType: GameType;
-  difficulty?: Difficulty;
+  gameMode?: 'classic' | 'blitz' | 'ranked' | 'custom';
+  gameType?: GameType; // Alias for gameMode
+  isPrivate?: boolean;
+  maxPlayers?: number;
   timeLimit?: number;
+  gameName?: string;
+  password?: string;
+  creatorId?: string;
+  startedAt?: string;
+  endedAt?: string;
+  xpAwarded?: boolean;
   createdAt: string;
   updatedAt: string;
-  endedAt?: string;
 }
 
 export interface GamePlayer {
   id: string;
+  _id?: string;
   username: string;
-  symbol: 'X' | 'O';
-  isConnected: boolean;
-  energy: number;
-  joinedAt: string;
+  avatar?: string;
+  symbol?: 'X' | 'O';
+  isConnected?: boolean;
+  energy?: number;
+  joinedAt?: string;
   lastMove?: string;
 }
 
 export interface GameMove {
-  id: string;
-  playerId: string;
+  id?: string;
+  player: string;
   position: Position;
   symbol: 'X' | 'O';
   timestamp: string;
-  moveNumber: number;
+  moveNumber?: number;
 }
 
 export interface Position {
@@ -78,7 +113,7 @@ export interface Position {
   col: number;
 }
 
-export interface WinCondition {
+export interface WinConditionInfo {
   type: 'row' | 'column' | 'diagonal';
   positions: Position[];
 }
@@ -143,11 +178,10 @@ export interface LeaderboardEntry {
 
 export interface ApiResponse<T = any> {
   success: boolean;
-  message: string;
+  message?: string;
   data?: T;
   error?: string;
-  errors?: Record<string, string[]>;
-  pagination?: PaginationInfo;
+  errors?: any;
 }
 
 export interface PaginationInfo {
@@ -221,11 +255,200 @@ export interface SendMessageRequest {
   type?: 'text' | 'system';
 }
 
-// Type Unions
-export type GameStatus = 'waiting' | 'in_progress' | 'completed' | 'abandoned';
-export type GameType = 'classic' | 'timed' | 'ranked' | 'custom';
-export type Difficulty = 'easy' | 'medium' | 'hard' | 'expert';
-export type CellValue = '' | 'X' | 'O';
+// API Response type
+export interface ApiResponse<T = any> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  error?: string;
+  errors?: any;
+}
+
+// Authentication Types
+export interface LoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
+  username: string;
+  email: string;
+  password: string;
+  confirmPassword?: string;
+}
+
+export interface AuthResponse {
+  success: boolean;
+  message: string;
+  user: User;
+  token: string;
+  refreshToken?: string;
+}
+
+export interface VerifyEmailRequest {
+  email: string;
+  code: string;
+}
+
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+  confirmPassword: string;
+}
+
+export interface ChangePasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}
+
+export interface UpdateProfileRequest {
+  username?: string;
+  email?: string;
+  profilePicture?: string;
+  bio?: string;
+  preferences?: Partial<UserPreferences>;
+}
+
+// Game API Types
+export interface CreateGameRequest {
+  gameConfig: {
+    gameMode?: 'classic' | 'blitz' | 'ranked' | 'custom';
+    isPrivate?: boolean;
+    maxPlayers?: number;
+    timeLimit?: number;
+    gameName?: string;
+    password?: string;
+  };
+}
+
+export interface MakeMoveRequest {
+  row: number;
+  col: number;
+}
+
+export interface JoinGameRequest {
+  roomId: string;
+  password?: string;
+}
+
+// Chat API Types
+export interface SendMessageRequest {
+  message: string;
+  type?: 'text' | 'system';
+}
+
+export interface ChatRoom {
+  id: string;
+  name: string;
+  description?: string;
+  isPrivate: boolean;
+  userCount: number;
+  maxUsers: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// Matchmaking Types
+export interface MatchmakingRequest {
+  gameType: GameType;
+  difficulty?: Difficulty;
+  preferredOpponent?: string;
+}
+
+export interface MatchmakingStatus {
+  inQueue: boolean;
+  queueTime?: number;
+  estimatedWaitTime?: number;
+  position?: number;
+  gameType?: GameType;
+}
+
+export interface QueueStats {
+  totalInQueue: number;
+  averageWaitTime: number;
+  activeMatches: number;
+  byGameType: {
+    [key in GameType]: number;
+  };
+}
+
+// Friend Types
+export interface Friend {
+  id: string;
+  user: User;
+  friendSince: string;
+  status: 'online' | 'offline' | 'in_game';
+  lastSeen?: string;
+  isBlocked?: boolean;
+}
+
+// Friend Request Types
+export interface FriendRequest {
+  id: string;
+  sender: User;
+  recipient: User;
+  status: 'pending' | 'accepted' | 'rejected';
+  sentAt: string;
+  respondedAt?: string;
+}
+
+export interface SendFriendRequestRequest {
+  username: string;
+}
+
+// Leaderboard Types
+export interface LeaderboardEntry {
+  rank: number;
+  user: User;
+  score: number;
+  gamesPlayed: number;
+  winRate: number;
+  currentStreak: number;
+}
+
+export interface LeaderboardResponse {
+  entries: LeaderboardEntry[];
+  totalPages: number;
+  currentPage: number;
+  totalUsers: number;
+}
+
+// Notification Types
+export interface Notification {
+  id: string;
+  type: 'game_invite' | 'friend_request' | 'game_result' | 'system' | 'achievement';
+  title: string;
+  message: string;
+  data?: any;
+  isRead: boolean;
+  createdAt: string;
+}
+
+// Admin Types
+export interface AdminStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalGames: number;
+  activeGames: number;
+  serverUptime: number;
+  systemHealth: {
+    cpu: number;
+    memory: number;
+    disk: number;
+  };
+}
+
+export interface AdminUser extends User {
+  lastLogin: string;
+  ipAddress: string;
+  isBlocked: boolean;
+  blockReason?: string;
+}
 
 // Context Types
 export interface AuthContextType {
@@ -239,8 +462,8 @@ export interface AuthContextType {
   refreshToken: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   changePassword: (credentials: ChangePasswordCredentials) => Promise<void>;
-  verifyEmail: (token: string) => Promise<void>;
-  resendVerification: () => Promise<void>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (credentials: ResetPasswordCredentials) => Promise<void>;
 }
@@ -249,10 +472,10 @@ export interface GameContextType {
   currentGame: Game | null;
   games: Game[];
   isLoading: boolean;
-  createGame: (request: GameCreateRequest) => Promise<Game>;
-  joinGame: (roomId: string) => Promise<void>;
-  makeMove: (request: GameMoveRequest) => Promise<void>;
-  forfeitGame: (roomId: string) => Promise<void>;
+  createGame: (request: CreateGameRequest) => Promise<Game>;
+  joinGame: (roomId: string) => Promise<any>;
+  makeMove: (request: GameMoveRequest) => Promise<Game>;
+  forfeitGame: (roomId: string) => Promise<Game | undefined>;
   getGameState: (roomId: string) => Promise<Game>;
   getActiveGames: () => Promise<Game[]>;
   getUserStats: () => Promise<UserStats>;

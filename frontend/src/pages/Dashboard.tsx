@@ -11,38 +11,54 @@ import {
   FireIcon 
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { Game, UserStats } from '../types';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { getActiveGames, createGame, getUserStats, isLoading } = useGame();
   const navigate = useNavigate();
-  const [activeGames, setActiveGames] = useState<any[]>([]);
-  const [userStats, setUserStats] = useState<any>(null);
+  const [activeGames, setActiveGames] = useState<Game[]>([]);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDashboardData = async () => {
     try {
-      const [games, stats] = await Promise.all([
-        getActiveGames(),
-        getUserStats(),
-      ]);
-      setActiveGames(games);
+      // Load games and stats separately to avoid one failure breaking the other
+      const gamesPromise = getActiveGames().catch(error => {
+        console.error('Failed to load active games:', error);
+        return [];
+      });
+      
+      const statsPromise = getUserStats().catch(error => {
+        console.error('Failed to load user stats:', error);
+        return null;
+      });
+
+      const [games, stats] = await Promise.all([gamesPromise, statsPromise]);
+      
+      // Ensure activeGames is always an array
+      setActiveGames(Array.isArray(games) ? games : []);
       setUserStats(stats);
     } catch (error) {
       console.error('Failed to load dashboard data:', error);
+      // Set default values on error
+      setActiveGames([]);
+      setUserStats(null);
     }
   };
 
   const handleCreateGame = async () => {
     try {
       const game = await createGame({
-        gameType: 'classic',
-        isPrivate: false,
+        gameConfig: {
+          gameMode: 'classic',
+          isPrivate: false,
+        }
       });
-      navigate(`/game/${game.roomId}`);
+      navigate(`/game/${game.roomId || game.room || game.id}`);
     } catch (error) {
       // Error handled by context
     }
@@ -141,28 +157,28 @@ const Dashboard: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <div className="card text-center">
             <div className="text-3xl font-bold text-primary-600 mb-2">
-              {userStats.gamesPlayed || 0}
+              {userStats?.gamesPlayed || 0}
             </div>
             <p className="text-gray-600">Games Played</p>
           </div>
           
           <div className="card text-center">
             <div className="text-3xl font-bold text-success-600 mb-2">
-              {userStats.gamesWon || 0}
+              {userStats?.wins || 0}
             </div>
             <p className="text-gray-600">Games Won</p>
           </div>
           
           <div className="card text-center">
             <div className="text-3xl font-bold text-warning-600 mb-2">
-              {userStats.winRate ? `${(userStats.winRate * 100).toFixed(1)}%` : '0%'}
+              {userStats?.winRate ? `${(userStats.winRate * 100).toFixed(1)}%` : '0%'}
             </div>
             <p className="text-gray-600">Win Rate</p>
           </div>
           
           <div className="card text-center">
             <div className="text-3xl font-bold text-error-600 mb-2">
-              {userStats.currentStreak || 0}
+              {userStats?.currentStreak || 0}
             </div>
             <p className="text-gray-600">Current Streak</p>
           </div>
@@ -176,7 +192,7 @@ const Dashboard: React.FC = () => {
           <UserGroupIcon className="w-6 h-6 text-gray-400" />
         </div>
         
-        {activeGames.length === 0 ? (
+        {!Array.isArray(activeGames) || activeGames.length === 0 ? (
           <div className="text-center py-8">
             <ClockIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-500">No active games at the moment</p>
@@ -196,10 +212,10 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">
-                      Game #{game.roomId.slice(0, 8)}
+                      Game #{(game.roomId || game.room).slice(0, 8)}
                     </p>
                     <p className="text-sm text-gray-500">
-                      {game.players?.length || 0}/2 players • {game.status}
+                      {(game.players.player2 ? 2 : 1)}/2 players • {game.status}
                     </p>
                   </div>
                 </div>

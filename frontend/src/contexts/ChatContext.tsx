@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
-import { chatService, ChatRoom, ChatMessage } from '../services/chat';
+import { chatAPI } from '../services/chat';
+import { ChatRoom, ChatMessage } from '../types';
 import { useSocket } from './SocketContext';
 
 interface ChatState {
@@ -162,8 +163,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const loadRooms = async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const rooms = await chatService.getChatRooms();
-      dispatch({ type: 'SET_ROOMS', payload: rooms });
+      const response = await chatAPI.getChatRooms();
+      dispatch({ type: 'SET_ROOMS', payload: response.data || [] });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load chat rooms' });
     }
@@ -171,7 +172,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const joinRoom = async (roomId: string) => {
     try {
-      await chatService.joinChatRoom(roomId);
+      await chatAPI.joinChatRoom(roomId);
       if (socket) {
         socket.emit('room:join', { roomId });
       }
@@ -182,7 +183,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const leaveRoom = async (roomId: string) => {
     try {
-      await chatService.leaveChatRoom(roomId);
+      await chatAPI.leaveChatRoom(roomId);
       if (socket) {
         socket.emit('room:leave', { roomId });
       }
@@ -194,10 +195,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const sendMessage = async (roomId: string, content: string) => {
     try {
-      const message = await chatService.sendMessage({
+      const response = await chatAPI.sendMessage(roomId, {
         roomId,
-        content,
-        messageType: 'text',
+        message: content,
+        type: 'text',
       });
       
       if (socket) {
@@ -210,7 +211,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const loadMessages = async (roomId: string, page = 1) => {
     try {
-      const { messages } = await chatService.getChatHistory(roomId, page, 50);
+      const response = await chatAPI.getChatHistory(roomId, page, 50);
+      const messages = response.data || [];
       dispatch({ type: 'SET_MESSAGES', payload: { roomId, messages } });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load messages' });

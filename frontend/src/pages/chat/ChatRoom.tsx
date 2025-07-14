@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useChatContext } from '../../contexts/ChatContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ChatMessage } from '../../components/chat/ChatMessage';
@@ -17,7 +17,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ roomId }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const room = state.rooms.find(r => r.id === roomId);
-  const messages = state.messages[roomId] || [];
+  const messages = useMemo(() => state.messages[roomId] || [], [state.messages, roomId]);
 
   useEffect(() => {
     const initializeRoom = async () => {
@@ -85,7 +85,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({ roomId }) => {
             <ChatMessage 
               key={message.id} 
               message={message} 
-              isOwn={message.senderId === user?.id} 
+              isOwn={message.userId === user?.id} 
             />
           ))
         )}

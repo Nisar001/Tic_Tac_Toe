@@ -1,5 +1,5 @@
 import React from 'react';
-import { ChatMessage as ChatMessageType } from '../../services/chat';
+import { ChatMessage as ChatMessageType } from '../../types';
 
 interface ChatMessageProps {
   message: ChatMessageType;
@@ -15,7 +15,7 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isOwn }) => {
   };
 
   const getMessageStyle = () => {
-    if (message.messageType === 'system') {
+    if (message.type === 'system') {
       return 'bg-gray-100 text-gray-600 text-center italic';
     }
     
@@ -27,18 +27,18 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isOwn }) => {
   };
 
   const getContainerStyle = () => {
-    if (message.messageType === 'system') {
+    if (message.type === 'system') {
       return 'flex justify-center';
     }
     
     return isOwn ? 'flex justify-end' : 'flex justify-start';
   };
 
-  if (message.messageType === 'system') {
+  if (message.type === 'system') {
     return (
       <div className={getContainerStyle()}>
         <div className="max-w-xs px-3 py-2 rounded-full text-sm bg-gray-100 text-gray-600 text-center italic">
-          {message.content}
+          {message.message}
         </div>
       </div>
     );
@@ -49,14 +49,14 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isOwn }) => {
       <div className="max-w-xs lg:max-w-md">
         {!isOwn && (
           <div className="text-xs text-gray-500 mb-1 px-2">
-            {message.senderName}
+            {message.username}
           </div>
         )}
         
         <div className={`px-4 py-2 rounded-lg ${getMessageStyle()}`}>
-          <p className="text-sm">{message.content}</p>
+          <p className="text-sm">{message.message}</p>
           <p className={`text-xs mt-1 ${isOwn ? 'text-blue-100' : 'text-gray-500'}`}>
-            {formatTime(message.createdAt)}
+            {formatTime(message.timestamp)}
           </p>
         </div>
       </div>

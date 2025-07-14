@@ -17,7 +17,7 @@ const GameBoard: React.FC = () => {
     if (roomId) {
       loadGameState();
     }
-  }, [roomId]);
+  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (currentGame) {
@@ -113,29 +113,29 @@ const GameBoard: React.FC = () => {
 
         {/* Players */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {currentGame.players?.map((player, index) => (
+          {[currentGame.players.player1, currentGame.players.player2].filter(Boolean).map((player, index) => (
             <div 
-              key={player.id}
+              key={player?.id}
               className={`p-3 rounded-lg border-2 ${
-                currentGame.currentPlayer === player.id
+                currentGame.currentPlayer === player?.id
                   ? 'border-primary-300 bg-primary-50'
                   : 'border-gray-200 bg-gray-50'
               }`}
             >
               <div className="flex items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                  player.symbol === 'X' ? 'bg-primary-100' : 'bg-error-100'
+                  player?.symbol === 'X' ? 'bg-primary-100' : 'bg-error-100'
                 }`}>
-                  {player.symbol === 'X' ? (
+                  {player?.symbol === 'X' ? (
                     <XMarkIcon className={`w-5 h-5 text-primary-600`} />
                   ) : (
                     <CircleStackIcon className={`w-5 h-5 text-error-600`} />
                   )}
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900">{player.username}</p>
+                  <p className="font-medium text-gray-900">{player?.username}</p>
                   <p className="text-xs text-gray-500">
-                    {player.isConnected ? 'Online' : 'Offline'}
+                    {player?.isConnected ? 'Online' : 'Offline'}
                   </p>
                 </div>
               </div>
