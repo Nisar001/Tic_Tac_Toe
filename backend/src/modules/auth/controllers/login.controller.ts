@@ -105,27 +105,3 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       }
     });
 });
-
-// TEMPORARY: Emergency password reset endpoint for debugging
-export const emergencyPasswordReset = asyncHandler(async (req: Request, res: Response) => {
-  const { email, newPassword, adminKey } = req.body;
-
-  // Simple security check
-  if (adminKey !== 'DEBUG_PASSWORD_RESET_2025') {
-    throw createError.unauthorized('Invalid admin key');
-  }
-
-  console.log('🚨 Emergency password reset requested for:', email);
-
-  const success = await AuthUtils.emergencyPasswordReset(email, newPassword);
-
-  if (success) {
-    res.json({
-      success: true,
-      message: 'Password reset successfully',
-      newPassword: newPassword // Only for debugging
-    });
-  } else {
-    throw createError.internal('Password reset failed');
-  }
-});

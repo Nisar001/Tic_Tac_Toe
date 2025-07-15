@@ -12,8 +12,7 @@ import {
   getProfile,
   updateProfile,
   changePassword,
-  deleteAccount,
-  emergencyPasswordReset
+  deleteAccount
 } from '../controllers';
 
 // Import social routes
@@ -88,9 +87,6 @@ router.post('/reset-password',
 );
 
 router.post('/refresh-token', refreshToken);
-
-// TEMPORARY: Emergency password reset (remove in production)
-router.post('/emergency-reset', emergencyPasswordReset);
 
 // Protected routes (require authentication)
 router.use(authenticate as any); // All routes below require authentication

@@ -1,6 +1,11 @@
 # Node.js
 node_modules/
 
+tests/
+All-APIS-COMPLETE-TEST.js
+*.test.ts
+
+
 # Logs
 logs/
 *.log

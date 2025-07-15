@@ -1,5 +1,5 @@
 export { register, registrationRateLimit } from './register.controller';
-export { login, emergencyPasswordReset } from './login.controller';
+export { login } from './login.controller';
 export { verifyEmail } from './verifyEmail.controller';
 export { resendVerification, resendVerificationRateLimit } from './resendVerification.controller';
 export { requestPasswordReset, passwordResetRateLimit } from './requestPasswordReset.controller';
