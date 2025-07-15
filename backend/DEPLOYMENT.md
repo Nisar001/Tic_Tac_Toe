@@ -23,11 +23,18 @@
    ```
    Name: tic-tac-toe-backend
    Branch: main (or your default branch)
-   Root Directory: . (or path to backend folder)
+   Root Directory: backend (if in monorepo, otherwise leave empty)
    Runtime: Node
    Build Command: npm run render-build
    Start Command: npm run render-start
    ```
+
+   **⚠️ IMPORTANT**: Make sure to use `npm run render-build` and NOT `npm build`
+
+   **Alternative Build Commands** (if render-build doesn't work):
+   - `npm install && npm run build`
+   - `npm ci && npm run build`
+   - `npm run build`
 
 3. **Set Environment Variables**
    ```
@@ -109,6 +116,32 @@ Your deployed service will be available at:
 - [ ] SSL certificate is active
 
 ## 🐛 Common Issues & Solutions
+
+### ❌ Build Command Error: "Unknown command: build"
+**Problem**: Render shows `Unknown command: "build"`
+
+**Solutions**:
+1. **Check Build Command in Render Dashboard**:
+   - Go to Service Settings → Build & Deploy
+   - Ensure Build Command is: `npm run render-build` (NOT `npm build`)
+   - Ensure Start Command is: `npm run render-start`
+   - Save and redeploy
+
+2. **Alternative Build Commands** (try in order):
+   ```bash
+   npm run render-build
+   npm install && npm run build  
+   npm ci && npm run build
+   npm run build
+   ```
+
+3. **Root Directory Issues**:
+   - If in monorepo: Set Root Directory to `backend`
+   - If standalone: Leave Root Directory empty or set to `.`
+
+4. **Manual Deploy**:
+   - After fixing settings, click "Manual Deploy"
+   - Don't rely on auto-deploy for the first deployment
 
 ### Build Fails
 - Check Node.js version compatibility

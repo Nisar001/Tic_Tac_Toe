@@ -172,6 +172,26 @@ app.get('/metrics', (req, res) => {
 import path from 'path';
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Root route for API information
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'Tic Tac Toe API v1.0.0',
+    version: '1.0.0',
+    status: 'active',
+    timestamp: new Date().toISOString(),
+    environment: config.NODE_ENV,
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      auth: '/api/auth',
+      game: '/api/game',
+      chat: '/api/chat',
+      metrics: '/metrics'
+    },
+    documentation: 'API endpoints available at /api'
+  });
+});
+
 // API routes
 app.use('/api', appRoutes);
 

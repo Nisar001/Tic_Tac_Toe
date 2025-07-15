@@ -28,9 +28,9 @@ services:
       - key: JWT_REFRESH_EXPIRES_IN
         value: 30d
       - key: FRONTEND_URL
-        sync: false  # Set this to your frontend URL
+        value: https://your-frontend-domain.com
       - key: CORS_ORIGIN
-        sync: false  # Set this to your frontend URL
+        value: https://your-frontend-domain.com
       - key: EMAIL_HOST
         sync: false  # Optional: Set in dashboard
       - key: EMAIL_PORT
