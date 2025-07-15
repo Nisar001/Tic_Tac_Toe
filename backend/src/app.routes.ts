@@ -22,6 +22,17 @@ const requestLogger = (req: Request, res: Response, next: NextFunction) => {
 // Request logging middleware for API routes
 router.use(requestLogger);
 
+// Health check endpoint for Render
+router.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'ok',
+    message: 'Server is healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
 // API version and documentation endpoint
 router.get('/', (req: Request, res: Response, next: NextFunction) => {
   try {

@@ -1,18 +1,27 @@
 {
-  "name": "backend",
+  "name": "tic-tac-toe-backend",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Backend API for Tic Tac Toe game with real-time multiplayer support",
+  "main": "dist/server.js",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
-    "start": "node dist/server.js",
     "build": "tsc",
+    "start": "node dist/server.js",
     "clean": "rimraf dist",
     "build:prod": "npm run clean && tsc",
     "start:prod": "NODE_ENV=production node dist/server.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "postinstall": "npm run build",
+    "render-build": "npm install && npm run build",
+    "render-start": "node dist/server.js",
+    "verify-deployment": "node scripts/verify-deployment.js",
+    "deploy:verify": "npm run verify-deployment"
   },
   "keywords": [],
   "author": "",

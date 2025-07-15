@@ -28,7 +28,29 @@ A comprehensive Node.js/Express backend for a multiplayer Tic Tac Toe game with 
 - **Health Monitoring**
 - **Metrics & Analytics**
 - **Admin API Endpoints**
-- **Comprehensive Logging**
+
+## 🌐 Deployment
+
+This application is ready for deployment on **Render** and other cloud platforms.
+
+### Quick Deploy to Render
+1. Fork this repository
+2. Create account on [Render](https://render.com)
+3. Connect your repository
+4. Use the deployment settings below
+5. Set environment variables
+6. Deploy!
+
+**Build Command**: `npm run render-build`  
+**Start Command**: `npm run render-start`
+
+📖 **Full deployment guide**: [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+### Other Platforms
+- **Heroku**: Compatible with Heroku deployment
+- **Railway**: Works with Railway platform
+- **DigitalOcean**: App Platform ready
+- **AWS/GCP/Azure**: Container deployment with Docker
 
 ## 🛠️ Tech Stack
 

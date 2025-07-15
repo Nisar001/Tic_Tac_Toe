@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: tic-tac-toe-backend
+    runtime: node
+    plan: free  # Change to 'starter' or higher for production
+    buildCommand: npm run render-build
+    startCommand: npm run render-start
+    healthCheckPath: /health
+    autoDeploy: false
+    env: node
+    region: oregon  # Choose closest region
+    scaling:
+      minInstances: 1
+      maxInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGO_URI
+        sync: false  # Set this in Render dashboard
+      - key: JWT_SECRET
+        sync: false  # Set this in Render dashboard
+      - key: JWT_REFRESH_SECRET
+        sync: false  # Set this in Render dashboard
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: JWT_REFRESH_EXPIRES_IN
+        value: 30d
+      - key: FRONTEND_URL
+        sync: false  # Set this to your frontend URL
+      - key: CORS_ORIGIN
+        sync: false  # Set this to your frontend URL
+      - key: EMAIL_HOST
+        sync: false  # Optional: Set in dashboard
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USER
+        sync: false  # Optional: Set in dashboard
+      - key: EMAIL_PASSWORD
+        sync: false  # Optional: Set in dashboard
+      - key: TWILIO_ACCOUNT_SID
+        sync: false  # Optional: Set in dashboard
+      - key: TWILIO_AUTH_TOKEN
+        sync: false  # Optional: Set in dashboard
+      - key: TWILIO_PHONE_NUMBER
+        sync: false  # Optional: Set in dashboard
