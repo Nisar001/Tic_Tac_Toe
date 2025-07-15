@@ -36,16 +36,6 @@ export const socialConfig = {
       callback: `${currentBaseUrl}/api/auth/facebook/callback`,
       success: `${currentFrontendUrl}/auth/success`,
       error: `${currentFrontendUrl}/auth/error`
-    },
-    instagram: {
-      callback: `${currentBaseUrl}/api/auth/instagram/callback`,
-      success: `${currentFrontendUrl}/auth/success`,
-      error: `${currentFrontendUrl}/auth/error`
-    },
-    twitter: {
-      callback: `${currentBaseUrl}/api/auth/twitter/callback`,
-      success: `${currentFrontendUrl}/auth/success`,
-      error: `${currentFrontendUrl}/auth/error`
     }
   },
 
@@ -59,16 +49,6 @@ export const socialConfig = {
       appId: process.env.FACEBOOK_APP_ID,
       appSecret: process.env.FACEBOOK_APP_SECRET,
       scope: ['email', 'public_profile']
-    },
-    instagram: {
-      clientId: process.env.INSTAGRAM_CLIENT_ID,
-      clientSecret: process.env.INSTAGRAM_CLIENT_SECRET,
-      scope: ['user_profile', 'user_media']
-    },
-    twitter: {
-      apiKey: process.env.TWITTER_API_KEY,
-      apiSecret: process.env.TWITTER_API_SECRET,
-      scope: ['tweet.read', 'users.read']
     }
   }
 };
@@ -85,16 +65,6 @@ export const socialProviderRedirectURIs = {
       'http://localhost:3000/api/auth/facebook/callback',
       'http://localhost:3001/auth/success',
       'http://localhost:3001/auth/error'
-    ],
-    instagram: [
-      'http://localhost:3000/api/auth/instagram/callback',
-      'http://localhost:3001/auth/success',
-      'http://localhost:3001/auth/error'
-    ],
-    twitter: [
-      'http://localhost:3000/api/auth/twitter/callback',
-      'http://localhost:3001/auth/success',
-      'http://localhost:3001/auth/error'
     ]
   },
   production: {
@@ -105,16 +75,6 @@ export const socialProviderRedirectURIs = {
     ],
     facebook: [
       `${baseUrls.production}/api/auth/facebook/callback`,
-      `${frontendUrls.production}/auth/success`,
-      `${frontendUrls.production}/auth/error`
-    ],
-    instagram: [
-      `${baseUrls.production}/api/auth/instagram/callback`,
-      `${frontendUrls.production}/auth/success`,
-      `${frontendUrls.production}/auth/error`
-    ],
-    twitter: [
-      `${baseUrls.production}/api/auth/twitter/callback`,
       `${frontendUrls.production}/auth/success`,
       `${frontendUrls.production}/auth/error`
     ]
@@ -129,10 +89,6 @@ export const validateSocialConfig = (): boolean => {
   if (!process.env.GOOGLE_CLIENT_SECRET) missing.push('GOOGLE_CLIENT_SECRET');
   if (!process.env.FACEBOOK_APP_ID) missing.push('FACEBOOK_APP_ID');
   if (!process.env.FACEBOOK_APP_SECRET) missing.push('FACEBOOK_APP_SECRET');
-  if (!process.env.TWITTER_API_KEY) missing.push('TWITTER_API_KEY');
-  if (!process.env.TWITTER_API_SECRET) missing.push('TWITTER_API_SECRET');
-  if (!process.env.INSTAGRAM_CLIENT_ID) missing.push('INSTAGRAM_CLIENT_ID');
-  if (!process.env.INSTAGRAM_CLIENT_SECRET) missing.push('INSTAGRAM_CLIENT_SECRET');
 
   if (missing.length > 0) {
     console.warn(

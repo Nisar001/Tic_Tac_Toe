@@ -71,12 +71,6 @@ export const config = {
   FACEBOOK_APP_ID: process.env.FACEBOOK_APP_ID || '',
   FACEBOOK_APP_SECRET: process.env.FACEBOOK_APP_SECRET || '',
 
-  TWITTER_CONSUMER_KEY: process.env.TWITTER_CONSUMER_KEY || '',
-  TWITTER_CONSUMER_SECRET: process.env.TWITTER_CONSUMER_SECRET || '',
-
-  INSTAGRAM_CLIENT_ID: process.env.INSTAGRAM_CLIENT_ID || '',
-  INSTAGRAM_CLIENT_SECRET: process.env.INSTAGRAM_CLIENT_SECRET || '',
-
   EMAIL_HOST: process.env.EMAIL_HOST || 'smtp.gmail.com',
   EMAIL_PORT: parseInt(process.env.EMAIL_PORT || '587'),
   EMAIL_USER: process.env.EMAIL_USER || '',

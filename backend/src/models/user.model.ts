@@ -9,7 +9,7 @@ export interface IUser extends Document {
   password?: string;
   username: string;
   avatar?: string;
-  provider: 'manual' | 'google' | 'facebook' | 'instagram' | 'twitter';
+  provider: 'manual' | 'google' | 'facebook';
   providerId?: string;
   level: number;
   xp: number;
@@ -115,7 +115,7 @@ const UserSchema = new Schema<IUser>({
   },
   provider: { 
     type: String, 
-    enum: ['manual', 'google', 'facebook', 'instagram', 'twitter'], 
+    enum: ['manual', 'google', 'facebook'], 
     required: true 
   },
   providerId: { type: String },
@@ -430,7 +430,7 @@ UserSchema.methods.validateUserData = function(): { isValid: boolean; errors: st
     }
     
     // Provider validation
-    const validProviders = ['manual', 'google', 'facebook', 'instagram', 'twitter'];
+    const validProviders = ['manual', 'google', 'facebook'];
     if (!validProviders.includes(this.provider)) {
       errors.push('Invalid provider');
     }

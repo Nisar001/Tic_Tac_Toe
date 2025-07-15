@@ -6,13 +6,7 @@ import {
   facebookAuthRateLimit,
   googleLogin,
   googleCallback,
-  socialAuthRateLimit,
-  instagramLogin,
-  instagramCallback,
-  instagramAuthRateLimit,
-  twitterLogin,
-  twitterCallback,
-  twitterAuthRateLimit
+  socialAuthRateLimit
 } from '../controllers/social';
 import { logWarn } from '../../../utils/logger';
 
@@ -39,21 +33,6 @@ router.get('/facebook',
 router.get('/facebook/callback', asyncHandler(facebookCallback));
 router.post('/facebook', facebookAuthRateLimit, asyncHandler(facebookLogin));
 
-// Twitter authentication routes
-router.get('/twitter',
-  twitterAuthRateLimit,
-  passport.authenticate('twitter')
-);
-router.get('/twitter/callback', asyncHandler(twitterCallback));
-router.post('/twitter', twitterAuthRateLimit, asyncHandler(twitterLogin));
-
-// Instagram authentication routes
-router.get('/instagram',
-  instagramAuthRateLimit,
-  passport.authenticate('instagram')
-);
-router.get('/instagram/callback', asyncHandler(instagramCallback));
-router.post('/instagram', instagramAuthRateLimit, asyncHandler(instagramLogin));
 
 // Catch-all for undefined social auth routes
 router.use('*', (req: Request, res: Response) => {
@@ -61,7 +40,7 @@ router.use('*', (req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     message: 'Social authentication endpoint not found',
-    availableProviders: ['google', 'facebook', 'twitter', 'instagram']
+    availableProviders: ['google', 'facebook']
   });
 });
 

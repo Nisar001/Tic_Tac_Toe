@@ -1,8 +1,6 @@
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import { Strategy as FacebookStrategy } from 'passport-facebook';
-import { Strategy as TwitterStrategy } from 'passport-twitter';
-import { Strategy as InstagramStrategy } from 'passport-instagram';
 import UserModel, { IUser } from '../models/user.model';
 import { socialConfig } from './social.config';
 import { logError, logInfo, logWarn } from '../utils/logger';
@@ -119,48 +117,8 @@ if (socialConfig.providers.facebook.appId && socialConfig.providers.facebook.app
   logWarn('⚠️ Facebook OAuth not configured - missing APP_ID or APP_SECRET');
 }
 
-//
-// ✅ Twitter Strategy
-//
-if (socialConfig.providers.twitter.apiKey && socialConfig.providers.twitter.apiSecret) {
-  passport.use(new TwitterStrategy({
-    consumerKey: socialConfig.providers.twitter.apiKey,
-    consumerSecret: socialConfig.providers.twitter.apiSecret,
-    callbackURL: socialConfig.redirectUrIs.twitter.callback,
-    includeEmail: true,
-  }, async (token, tokenSecret, profile, done) => {
-    try {
-      const user = await findOrCreateUser(profile, 'twitter');
-      return done(null, user);
-    } catch (error) {
-      logError(`Twitter OAuth error: ${(error as Error).message}`);
-      return done(error, false);
-    }
-  }));
-} else {
-  logWarn('⚠️ Twitter OAuth not configured - missing API_KEY or API_SECRET');
-}
 
-//
-// ✅ Instagram Strategy
-// ⚠️ Note: passport-instagram is deprecated; consider using Instagram Graph API via OAuth2 manually.
-//
-if (socialConfig.providers.instagram.clientId && socialConfig.providers.instagram.clientSecret) {
-  passport.use(new InstagramStrategy({
-    clientID: socialConfig.providers.instagram.clientId,
-    clientSecret: socialConfig.providers.instagram.clientSecret,
-    callbackURL: socialConfig.redirectUrIs.instagram.callback,
-  }, async (accessToken, refreshToken, profile, done) => {
-    try {
-      const user = await findOrCreateUser(profile, 'instagram');
-      return done(null, user);
-    } catch (error) {
-      logError(`Instagram OAuth error: ${(error as Error).message}`);
-      return done(error, false);
-    }
-  }));
-} else {
-  logWarn('⚠️ Instagram OAuth not configured - missing CLIENT_ID or CLIENT_SECRET');
-}
+
+
 
 export default passport;

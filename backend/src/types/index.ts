@@ -7,7 +7,7 @@ export interface IUser extends Document {
   password?: string;
   username: string;
   avatar?: string;
-  provider: 'manual' | 'google' | 'facebook' | 'instagram' | 'twitter';
+  provider: 'manual' | 'google' | 'facebook';
   providerId?: string;
   level: number;
   xp: number;
