@@ -1,233 +1,298 @@
 import passport from 'passport';
 import { Request, Response, NextFunction } from 'express';
-import UserModel from '../../../../models/user.model';
-import { AuthUtils } from '../../../../utils/auth.utils';
-import { Logger } from '../../../../utils/logger';
 import rateLimit from 'express-rate-limit';
+import { asyncHandler, createError } from '../../../../middlewares/error.middleware';
+import { AuthUtils } from '../../../../utils/auth.utils';
+import { logInfo, logWarn, logError } from '../../../../utils/logger';
+import { EnergyManager } from '../../../../utils/energy.utils';
+import User from '../../../../models/user.model';
 
-// Rate limiting for Twitter authentication
+// Enhanced rate limiting for Twitter authentication
 export const twitterAuthRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 8 : 15, // 8 in prod, 15 in dev
   message: {
-    message: 'Too many Twitter authentication attempts, please try again later.',
-    code: 'RATE_LIMIT_EXCEEDED'
+    success: false,
+    message: 'Too many Twitter authentication attempts. Please try again later.',
+    code: 'TWITTER_AUTH_RATE_LIMIT_EXCEEDED'
   },
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'test'
+  skip: () => process.env.NODE_ENV === 'test'
 });
-
-interface TwitterProfile {
-  id: string;
-  username: string;
-  displayName: string;
-  photos: Array<{ value: string }>;
-  provider: string;
-  emails?: Array<{ value: string }>;
-}
 
 interface SocialAuthUser {
   _id: string;
-  email: string;
+  email?: string; // Twitter might not always provide email
   username: string;
   provider: string;
   providerId: string;
   avatar?: string;
   isEmailVerified: boolean;
   level: number;
-  xp: number;
+  totalXP: number;
   energy: number;
+  lastEnergyUpdate?: Date;
+  refreshTokens?: any[];
+  isDeleted?: boolean;
+  isBlocked?: boolean;
 }
 
-export const twitterLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const twitterLogin = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  const clientIP = req.ip || 'unknown';
+
   try {
+    // Enhanced input validation (Twitter uses oauth_token and oauth_verifier)
     if (!req.user && (!req.query.oauth_token || !req.query.oauth_verifier)) {
-      Logger.logWarn('Twitter login attempted without proper authentication flow', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        timestamp: new Date().toISOString()
-      });
-      res.status(400).json({
-        message: 'Invalid authentication request',
-        code: 'INVALID_AUTH_REQUEST'
-      });
-      return;
+      logWarn(`Twitter login attempted without proper authentication flow from IP: ${clientIP}`);
+      throw createError.badRequest('Invalid authentication request');
     }
 
-    passport.authenticate('twitter', async (err: Error | null, user: SocialAuthUser | false, info: { message?: string }) => {
+    // Use passport authenticate with proper error handling
+    passport.authenticate('twitter', async (
+      err: Error | null,
+      user: SocialAuthUser | false,
+      info: { message?: string }
+    ) => {
       try {
+        // Enhanced error handling
         if (err) {
-          Logger.logError('Twitter authentication error', {
-            error: err.message,
-            stack: err.stack,
-            ip: req.ip,
-            userAgent: req.get('User-Agent'),
-            timestamp: new Date().toISOString()
-          });
-          res.status(500).json({ message: 'Authentication service temporarily unavailable', code: 'AUTH_SERVICE_ERROR' });
-          return;
+          logError(`Twitter authentication service error from IP ${clientIP}: ${err.message}`);
+          throw createError.serviceUnavailable('Authentication service temporarily unavailable');
         }
 
         if (!user) {
-          Logger.logWarn('Twitter authentication failed', {
-            reason: info?.message || 'Unknown reason',
-            ip: req.ip,
-            userAgent: req.get('User-Agent'),
-            timestamp: new Date().toISOString()
-          });
-          res.status(401).json({
-            message: 'Twitter authentication failed',
-            code: 'AUTH_FAILED',
-            details: info?.message || 'Authentication was not successful'
-          });
-          return;
+          logWarn(`Twitter authentication failed from IP ${clientIP}: ${info?.message || 'Unknown reason'}`);
+          throw createError.unauthorized('Twitter authentication failed');
         }
 
+        // Enhanced user validation (Twitter may not provide email)
         if (!user._id || !user.username || !user.provider) {
-          Logger.logError('Invalid user object from Twitter authentication', {
-            userId: user._id,
-            username: user.username,
-            provider: user.provider,
-            ip: req.ip,
-            timestamp: new Date().toISOString()
-          });
-          res.status(500).json({
-            message: 'Authentication data is incomplete',
-            code: 'INCOMPLETE_AUTH_DATA'
-          });
-          return;
+          logError(`Invalid user object from Twitter authentication from IP ${clientIP}: userId=${user._id}, username=${user.username}, provider=${user.provider}`);
+          throw createError.internal('Authentication data is incomplete');
         }
 
-        const userDoc = await UserModel.findById(user._id);
+        // Find and validate user
+        const userDoc = await User.findById(user._id).select('+refreshTokens');
         if (!userDoc) {
-          Logger.logError('User not found after Twitter authentication', {
-            userId: user._id,
-            username: user.username,
-            ip: req.ip,
-            timestamp: new Date().toISOString()
-          });
-          res.status(404).json({
-            message: 'User account not found',
-            code: 'USER_NOT_FOUND'
-          });
-          return;
+          logError(`User not found after Twitter authentication: ${user._id} from IP: ${clientIP}`);
+          throw createError.notFound('User account not found');
         }
 
-        req.logIn(userDoc as any, async (loginErr: Error | null) => {
-          try {
-            if (loginErr) {
-              Logger.logError('Session creation failed for Twitter login', {
-                error: loginErr.message,
-                userId: user._id,
-                username: user.username,
-                ip: req.ip,
-                timestamp: new Date().toISOString()
-              });
-              res.status(500).json({ message: 'Session creation failed', code: 'SESSION_ERROR' });
-              return;
-            }
+        // Enhanced account status checks
+        if (userDoc.isDeleted) {
+          logInfo(`Twitter login attempt on deleted account: ${userDoc.email || userDoc.username} from IP: ${clientIP}`);
+          throw createError.unauthorized('Account has been deactivated');
+        }
 
-            const accessToken = AuthUtils.generateAccessToken({
-              userId: user._id,
-              email: user.email || `${user.username}@twitter.local`
-            });
+        if (userDoc.isBlocked) {
+          logInfo(`Twitter login attempt on blocked account: ${userDoc.email || userDoc.username} from IP: ${clientIP}`);
+          throw createError.unauthorized('Account has been blocked');
+        }
 
-            const refreshToken = AuthUtils.generateRefreshToken({
-              userId: user._id
-            });
+        // Handle cases where Twitter doesn't provide email
+        const userEmail = user.email || userDoc.email || `${user.username}@twitter.local`;
 
-            await UserModel.findByIdAndUpdate(user._id, {
-              lastSeen: new Date(),
-              isOnline: true,
-              lastLoginMethod: 'twitter',
-              lastLoginIP: req.ip
-            });
+        // Generate tokens with enhanced error handling
+        let accessToken: string;
+        let refreshToken: string;
 
-            const sanitizedUser = {
-              id: user._id,
-              email: user.email,
-              username: user.username,
-              avatar: user.avatar,
-              level: user.level,
-              xp: user.xp,
-              energy: user.energy,
-              provider: user.provider,
-              isEmailVerified: user.isEmailVerified
-            };
+        try {
+          accessToken = AuthUtils.generateAccessToken({
+            userId: user._id,
+            email: userEmail
+          });
 
-            Logger.logInfo('Successful Twitter login', {
-              userId: user._id,
-              username: user.username,
-              ip: req.ip,
-              userAgent: req.get('User-Agent'),
-              timestamp: new Date().toISOString()
-            });
+          refreshToken = AuthUtils.generateRefreshToken({
+            userId: user._id
+          });
+        } catch (tokenError) {
+          logError(`Token generation failed for Twitter login user ${user._id}: ${tokenError}`);
+          throw createError.internal('Token generation failed');
+        }
 
-            res.status(200).json({
-              message: 'Twitter login successful',
-              code: 'LOGIN_SUCCESS',
-              user: sanitizedUser,
-              tokens: {
-                accessToken,
-                refreshToken,
-                expiresIn: process.env.JWT_EXPIRES_IN || '1h'
-              }
-            });
-          } catch (sessionError) {
-            Logger.logError('Error during Twitter login session handling', {
-              error: sessionError instanceof Error ? sessionError.message : 'Unknown error',
-              userId: user._id,
-              ip: req.ip,
-              timestamp: new Date().toISOString()
-            });
-            res.status(500).json({ message: 'Login processing failed', code: 'LOGIN_PROCESSING_ERROR' });
+        // Calculate current energy
+        const energyStatus = EnergyManager.calculateCurrentEnergy(
+          userDoc.energy || 0,
+          userDoc.lastEnergyUpdate || new Date(0)
+        );
+
+        // Update user with enhanced data
+        userDoc.lastSeen = new Date();
+        userDoc.isOnline = true;
+        userDoc.lastLoginMethod = 'twitter';
+        userDoc.lastLoginIP = clientIP;
+        userDoc.energy = energyStatus.currentEnergy;
+        userDoc.lastEnergyUpdate = new Date();
+
+        // Add refresh token
+        if (!Array.isArray(userDoc.refreshTokens)) {
+          userDoc.refreshTokens = [];
+        }
+
+        userDoc.refreshTokens.push({
+          token: refreshToken,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+        });
+
+        // Keep only the 5 most recent refresh tokens
+        if (userDoc.refreshTokens.length > 5) {
+          userDoc.refreshTokens = userDoc.refreshTokens
+            .sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, 5);
+        }
+
+        try {
+          await userDoc.save({ validateBeforeSave: false });
+        } catch (saveError) {
+          logError(`Failed to save Twitter login data for user ${user._id}: ${saveError}`);
+          // Don't fail the login if save fails, just log it
+        }
+
+        // Enhanced response data
+        const sanitizedUser = {
+          _id: userDoc._id,
+          id: userDoc._id,
+          email: userDoc.email,
+          username: userDoc.username,
+          avatar: userDoc.avatar,
+          level: userDoc.level || 1,
+          totalXP: userDoc.totalXP || 0,
+          energy: energyStatus.currentEnergy,
+          maxEnergy: energyStatus.maxEnergy,
+          provider: user.provider,
+          isEmailVerified: userDoc.isEmailVerified
+        };
+
+        // Performance logging
+        const duration = Date.now() - startTime;
+        logInfo(`Twitter login successful for user: ${userDoc.username} in ${duration}ms from IP: ${clientIP}`);
+
+        // Enhanced response
+        res.status(200).json({
+          success: true,
+          message: 'Twitter login successful',
+          data: {
+            user: sanitizedUser,
+            tokens: {
+              accessToken,
+              refreshToken,
+              expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+            },
+            energyStatus,
+            loginMethod: 'twitter'
           }
         });
+
       } catch (authError) {
-        Logger.logError('Error in Twitter authentication callback', {
-          error: authError instanceof Error ? authError.message : 'Unknown error',
-          ip: req.ip,
-          timestamp: new Date().toISOString()
-        });
-        res.status(500).json({ message: 'Authentication processing failed', code: 'AUTH_PROCESSING_ERROR' });
+        const duration = Date.now() - startTime;
+        logError(`Twitter authentication processing failed in ${duration}ms from IP ${clientIP}: ${authError instanceof Error ? authError.message : 'Unknown error'}`);
+        throw authError;
       }
     })(req, res, next);
-  } catch (error) {
-    Logger.logError('Unexpected error in Twitter login controller', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      ip: req.ip,
-      timestamp: new Date().toISOString()
-    });
-    res.status(500).json({ message: 'Internal server error', code: 'INTERNAL_ERROR' });
-  }
-};
 
-export const twitterCallback = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logError(`Twitter login failed in ${duration}ms from IP ${clientIP}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
+  }
+});
+
+export const twitterCallback = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  const clientIP = req.ip || 'unknown';
+
   try {
     passport.authenticate('twitter', {
-      failureRedirect: '/auth/login?error=twitter_auth_failed',
-      session: true
-    })(req, res, () => {
+      failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/login?error=twitter_auth_failed`,
+      session: false
+    })(req, res, async () => {
       try {
+        if (!req.user) {
+          logWarn(`Twitter callback: No user found after authentication from IP: ${clientIP}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          return res.redirect(`${frontendUrl}/auth/login?error=authentication_failed`);
+        }
+
+        const user = req.user as unknown as SocialAuthUser;
+
+        // Enhanced user validation
+        if (!user._id || !user.username) {
+          logError(`Twitter callback: Invalid user data from IP: ${clientIP}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          return res.redirect(`${frontendUrl}/auth/login?error=invalid_user_data`);
+        }
+
+        // Handle email for token generation
+        const userEmail = user.email || `${user.username}@twitter.local`;
+
+        // Generate tokens with error handling
+        let accessToken: string;
+        let refreshToken: string;
+
+        try {
+          accessToken = AuthUtils.generateAccessToken({
+            userId: user._id,
+            email: userEmail
+          });
+
+          refreshToken = AuthUtils.generateRefreshToken({
+            userId: user._id
+          });
+        } catch (tokenError) {
+          logError(`Token generation failed in Twitter callback for user ${user._id}: ${tokenError}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          return res.redirect(`${frontendUrl}/auth/login?error=token_generation_failed`);
+        }
+
+        // Update user data
+        try {
+          await User.findByIdAndUpdate(user._id, {
+            $push: {
+              refreshTokens: {
+                token: refreshToken,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              }
+            },
+            lastLogin: new Date(),
+            lastLoginMethod: 'twitter',
+            lastLoginIP: clientIP,
+            isOnline: true
+          });
+        } catch (updateError) {
+          logError(`Failed to update user data in Twitter callback for user ${user._id}: ${updateError}`);
+          // Don't fail the callback if update fails, just log it
+        }
+
+        // Performance logging
+        const duration = Date.now() - startTime;
+        logInfo(`Twitter callback successful for user: ${user._id} in ${duration}ms from IP: ${clientIP}`);
+
+        // Enhanced redirect with proper URL encoding
         const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        res.redirect(`${frontendUrl}/auth/callback?provider=twitter&success=true`);
-      } catch (redirectError) {
-        Logger.logError('Error during Twitter callback redirect', {
-          error: redirectError instanceof Error ? redirectError.message : 'Unknown error',
-          ip: req.ip,
-          timestamp: new Date().toISOString()
-        });
-        res.redirect('/auth/login?error=callback_failed');
+        const redirectUrl = new URL(`${frontendUrl}/auth/callback`);
+        redirectUrl.searchParams.set('provider', 'twitter');
+        redirectUrl.searchParams.set('token', accessToken);
+        redirectUrl.searchParams.set('refreshToken', refreshToken);
+        redirectUrl.searchParams.set('success', 'true');
+
+        return res.redirect(redirectUrl.toString());
+
+      } catch (callbackError) {
+        const duration = Date.now() - startTime;
+        logError(`Twitter callback processing failed in ${duration}ms from IP ${clientIP}: ${callbackError instanceof Error ? callbackError.message : 'Unknown error'}`);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/auth/login?error=callback_processing_failed`);
       }
     });
+
   } catch (error) {
-    Logger.logError('Unexpected error in Twitter callback', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      ip: req.ip,
-      timestamp: new Date().toISOString()
-    });
-    res.redirect('/auth/login?error=internal_error');
+    const duration = Date.now() - startTime;
+    logError(`Twitter callback failed in ${duration}ms from IP ${clientIP}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/auth/login?error=internal_error`);
   }
-};
+});

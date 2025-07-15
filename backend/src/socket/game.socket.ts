@@ -32,6 +32,8 @@ export class GameSocket {
   private authManager: SocketAuthManager;
   private io: SocketIOServer;
   private activeGames: Map<string, GameRoom> = new Map();
+  // Track cleanup timeouts to prevent memory leaks
+  private cleanupTimeouts: Map<string, NodeJS.Timeout> = new Map();
   handleGameForfeit: any;
 
   constructor(io: SocketIOServer, authManager: SocketAuthManager) {
@@ -677,11 +679,21 @@ export class GameSocket {
 
       console.log(`🏁 Game ended in room ${gameRoom.id}: ${endType}`);
       
+      // Clear any existing cleanup timeout
+      const existingTimeout = this.cleanupTimeouts.get(gameRoom.id);
+      if (existingTimeout) {
+        clearTimeout(existingTimeout);
+      }
+      
       // Clean up game room after some time
-      setTimeout(() => {
+      const cleanupTimeout = setTimeout(() => {
         this.activeGames.delete(gameRoom.id);
+        this.cleanupTimeouts.delete(gameRoom.id);
         console.log(`🧹 Cleaned up game room ${gameRoom.id}`);
       }, 300000); // 5 minutes
+
+      // Store the timeout for tracking
+      this.cleanupTimeouts.set(gameRoom.id, cleanupTimeout);
 
     } catch (error) {
       console.error('Game end handling error:', error);
@@ -712,6 +724,13 @@ export class GameSocket {
               message: 'Opponent disconnected. Game paused.',
               gameState: this.getGameState(gameRoom)
             });
+          }
+          
+          // Clean up any pending cleanup timeout if game should end
+          const cleanupTimeout = this.cleanupTimeouts.get(roomId);
+          if (cleanupTimeout) {
+            clearTimeout(cleanupTimeout);
+            this.cleanupTimeouts.delete(roomId);
           }
           
           console.log(`📡 Player ${disconnectedPlayer} disconnected from game ${roomId}`);

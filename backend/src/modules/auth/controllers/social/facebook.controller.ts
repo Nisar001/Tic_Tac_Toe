@@ -1,17 +1,20 @@
 import passport from 'passport';
 import { Request, Response, NextFunction } from 'express';
-import UserModel from '../../../../models/user.model';
-import { AuthUtils } from '../../../../utils/auth.utils';
-import { Logger } from '../../../../utils/logger';
-import { socialConfig } from '../../../../config/social.config';
 import rateLimit from 'express-rate-limit';
+import { asyncHandler, createError } from '../../../../middlewares/error.middleware';
+import { AuthUtils } from '../../../../utils/auth.utils';
+import { logInfo, logWarn, logError } from '../../../../utils/logger';
+import { EnergyManager } from '../../../../utils/energy.utils';
+import User from '../../../../models/user.model';
 
+// Enhanced rate limiting for Facebook authentication
 export const facebookAuthRateLimit = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 10,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'production' ? 8 : 15, // 8 in prod, 15 in dev
   message: {
-    message: 'Too many Facebook authentication attempts, please try again later.',
-    code: 'RATE_LIMIT_EXCEEDED'
+    success: false,
+    message: 'Too many Facebook authentication attempts. Please try again later.',
+    code: 'FACEBOOK_AUTH_RATE_LIMIT_EXCEEDED'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -27,210 +30,263 @@ interface SocialAuthUser {
   avatar?: string;
   isEmailVerified: boolean;
   level: number;
-  xp: number;
+  totalXP: number;
   energy: number;
+  lastEnergyUpdate?: Date;
+  refreshTokens?: any[];
+  isDeleted?: boolean;
+  isBlocked?: boolean;
 }
 
-export const facebookLogin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const facebookLogin = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  const clientIP = req.ip || 'unknown';
+
   try {
+    // Enhanced input validation
     if (!req.user && !req.query.code) {
-      Logger.logWarn('Facebook login attempted without proper authentication flow', {
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        timestamp: new Date().toISOString()
-      });
-      res.status(400).json({
-        message: 'Invalid authentication request',
-        code: 'INVALID_AUTH_REQUEST'
-      });
-      return;
+      logWarn(`Facebook login attempted without proper authentication flow from IP: ${clientIP}`);
+      throw createError.badRequest('Invalid authentication request');
     }
 
-    passport.authenticate('facebook', async (err: Error | null, user: SocialAuthUser | false, info: { message?: string }) => {
-      if (err) {
-        Logger.logError('Facebook authentication error', {
-          error: err.message,
-          stack: err.stack,
-          ip: req.ip,
-          userAgent: req.get('User-Agent'),
-          timestamp: new Date().toISOString()
-        });
-        return res.status(500).json({
-          message: 'Authentication service temporarily unavailable',
-          code: 'AUTH_SERVICE_ERROR'
-        });
-      }
-
-      if (!user) {
-        Logger.logWarn('Facebook authentication failed', {
-          reason: info?.message || 'Unknown reason',
-          ip: req.ip,
-          userAgent: req.get('User-Agent'),
-          timestamp: new Date().toISOString()
-        });
-        return res.status(401).json({
-          message: 'Facebook authentication failed',
-          code: 'AUTH_FAILED',
-          details: info?.message || 'Authentication was not successful'
-        });
-      }
-
-      const userDoc = await UserModel.findById(user._id);
-      if (!userDoc) {
-        Logger.logError('User not found after Facebook authentication', {
-          userId: user._id,
-          email: user.email,
-          ip: req.ip,
-          timestamp: new Date().toISOString()
-        });
-        return res.status(404).json({
-          message: 'User account not found',
-          code: 'USER_NOT_FOUND'
-        });
-      }
-
-      req.logIn(userDoc, async (loginErr: Error | null) => {
-        if (loginErr) {
-          Logger.logError('Session creation failed for Facebook login', {
-            error: loginErr.message,
-            userId: user._id,
-            ip: req.ip,
-            timestamp: new Date().toISOString()
-          });
-          return res.status(500).json({
-            message: 'Session creation failed',
-            code: 'SESSION_ERROR'
-          });
+    // Use passport authenticate with proper error handling
+    passport.authenticate('facebook', async (
+      err: Error | null,
+      user: SocialAuthUser | false,
+      info: { message?: string }
+    ) => {
+      try {
+        // Enhanced error handling
+        if (err) {
+          logError(`Facebook authentication service error from IP ${clientIP}: ${err.message}`);
+          throw createError.serviceUnavailable('Authentication service temporarily unavailable');
         }
 
-        const accessToken = AuthUtils.generateAccessToken({
-          userId: user._id,
-          email: user.email
+        if (!user) {
+          logWarn(`Facebook authentication failed from IP ${clientIP}: ${info?.message || 'Unknown reason'}`);
+          throw createError.unauthorized('Facebook authentication failed');
+        }
+
+        // Enhanced user validation
+        if (!user._id || !user.email || !user.provider) {
+          logError(`Invalid user object from Facebook authentication from IP ${clientIP}: userId=${user._id}, email=${user.email}, provider=${user.provider}`);
+          throw createError.internal('Authentication data is incomplete');
+        }
+
+        // Find and validate user
+        const userDoc = await User.findById(user._id).select('+refreshTokens');
+        if (!userDoc) {
+          logError(`User not found after Facebook authentication: ${user._id} from IP: ${clientIP}`);
+          throw createError.notFound('User account not found');
+        }
+
+        // Enhanced account status checks
+        if (userDoc.isDeleted) {
+          logInfo(`Facebook login attempt on deleted account: ${userDoc.email} from IP: ${clientIP}`);
+          throw createError.unauthorized('Account has been deactivated');
+        }
+
+        if (userDoc.isBlocked) {
+          logInfo(`Facebook login attempt on blocked account: ${userDoc.email} from IP: ${clientIP}`);
+          throw createError.unauthorized('Account has been blocked');
+        }
+
+        // Generate tokens with enhanced error handling
+        let accessToken: string;
+        let refreshToken: string;
+
+        try {
+          accessToken = AuthUtils.generateAccessToken({
+            userId: user._id,
+            email: user.email
+          });
+
+          refreshToken = AuthUtils.generateRefreshToken({
+            userId: user._id
+          });
+        } catch (tokenError) {
+          logError(`Token generation failed for Facebook login user ${user._id}: ${tokenError}`);
+          throw createError.internal('Token generation failed');
+        }
+
+        // Calculate current energy
+        const energyStatus = EnergyManager.calculateCurrentEnergy(
+          userDoc.energy || 0,
+          userDoc.lastEnergyUpdate || new Date(0)
+        );
+
+        // Update user with enhanced data
+        userDoc.lastSeen = new Date();
+        userDoc.isOnline = true;
+        userDoc.lastLoginMethod = 'facebook';
+        userDoc.lastLoginIP = clientIP;
+        userDoc.energy = energyStatus.currentEnergy;
+        userDoc.lastEnergyUpdate = new Date();
+
+        // Add refresh token
+        if (!Array.isArray(userDoc.refreshTokens)) {
+          userDoc.refreshTokens = [];
+        }
+
+        userDoc.refreshTokens.push({
+          token: refreshToken,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
         });
 
-        const refreshToken = AuthUtils.generateRefreshToken({
-          userId: user._id
-        });
+        // Keep only the 5 most recent refresh tokens
+        if (userDoc.refreshTokens.length > 5) {
+          userDoc.refreshTokens = userDoc.refreshTokens
+            .sort((a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime())
+            .slice(0, 5);
+        }
 
-        await UserModel.findByIdAndUpdate(user._id, {
-          lastSeen: new Date(),
-          isOnline: true,
-          lastLoginMethod: 'facebook',
-          lastLoginIP: req.ip
-        });
+        try {
+          await userDoc.save({ validateBeforeSave: false });
+        } catch (saveError) {
+          logError(`Failed to save Facebook login data for user ${user._id}: ${saveError}`);
+          // Don't fail the login if save fails, just log it
+        }
 
+        // Enhanced response data
         const sanitizedUser = {
-          id: user._id,
-          email: user.email,
-          username: user.username,
-          avatar: user.avatar,
-          level: user.level,
-          xp: user.xp,
-          energy: user.energy,
+          _id: userDoc._id,
+          id: userDoc._id,
+          email: userDoc.email,
+          username: userDoc.username,
+          avatar: userDoc.avatar,
+          level: userDoc.level || 1,
+          totalXP: userDoc.totalXP || 0,
+          energy: energyStatus.currentEnergy,
+          maxEnergy: energyStatus.maxEnergy,
           provider: user.provider,
-          isEmailVerified: user.isEmailVerified
+          isEmailVerified: userDoc.isEmailVerified
         };
 
-        Logger.logInfo('Successful Facebook login', {
-          userId: user._id,
-          email: user.email,
-          ip: req.ip,
-          userAgent: req.get('User-Agent'),
-          timestamp: new Date().toISOString()
-        });
+        // Performance logging
+        const duration = Date.now() - startTime;
+        logInfo(`Facebook login successful for user: ${userDoc.username} in ${duration}ms from IP: ${clientIP}`);
 
-        return res.status(200).json({
+        // Enhanced response
+        res.status(200).json({
+          success: true,
           message: 'Facebook login successful',
-          code: 'LOGIN_SUCCESS',
-          user: sanitizedUser,
-          tokens: {
-            accessToken,
-            refreshToken,
-            expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+          data: {
+            user: sanitizedUser,
+            tokens: {
+              accessToken,
+              refreshToken,
+              expiresIn: process.env.JWT_EXPIRES_IN || '7d'
+            },
+            energyStatus,
+            loginMethod: 'facebook'
           }
         });
-      });
+
+      } catch (authError) {
+        const duration = Date.now() - startTime;
+        logError(`Facebook authentication processing failed in ${duration}ms from IP ${clientIP}: ${authError instanceof Error ? authError.message : 'Unknown error'}`);
+        throw authError;
+      }
     })(req, res, next);
 
   } catch (error) {
-    Logger.logError('Unexpected error in Facebook login controller', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      ip: req.ip,
-      timestamp: new Date().toISOString()
-    });
-    res.status(500).json({
-      message: 'Internal server error',
-      code: 'INTERNAL_ERROR'
-    });
-    return;
+    const duration = Date.now() - startTime;
+    logError(`Facebook login failed in ${duration}ms from IP ${clientIP}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
   }
-};
+});
 
-export const facebookCallback = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const facebookCallback = asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  const startTime = Date.now();
+  const clientIP = req.ip || 'unknown';
+
   try {
     passport.authenticate('facebook', {
-      failureRedirect: socialConfig.redirectUrIs.facebook.error,
+      failureRedirect: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/login?error=facebook_auth_failed`,
       session: false
     })(req, res, async () => {
       try {
         if (!req.user) {
-          Logger.logWarn('Facebook callback: No user found after authentication', {
-            ip: req.ip,
-            timestamp: new Date().toISOString()
-          });
-          return res.redirect(`${socialConfig.redirectUrIs.facebook.error}?message=authentication_failed`);
+          logWarn(`Facebook callback: No user found after authentication from IP: ${clientIP}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          return res.redirect(`${frontendUrl}/auth/login?error=authentication_failed`);
         }
 
         const user = req.user as unknown as SocialAuthUser;
 
-        const accessToken = AuthUtils.generateAccessToken({
-          userId: user._id,
-          email: user.email
-        });
+        // Enhanced user validation
+        if (!user._id || !user.email) {
+          logError(`Facebook callback: Invalid user data from IP: ${clientIP}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          return res.redirect(`${frontendUrl}/auth/login?error=invalid_user_data`);
+        }
 
-        const refreshToken = AuthUtils.generateRefreshToken({
-          userId: user._id
-        });
+        // Generate tokens with error handling
+        let accessToken: string;
+        let refreshToken: string;
 
-        await UserModel.findByIdAndUpdate(user._id, {
-          $push: {
-            refreshTokens: {
-              token: refreshToken,
-              createdAt: new Date(),
-              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-            }
-          },
-          lastLogin: new Date()
-        });
+        try {
+          accessToken = AuthUtils.generateAccessToken({
+            userId: user._id,
+            email: user.email
+          });
 
-        Logger.logInfo('Facebook authentication successful', {
-          userId: user._id,
-          email: user.email,
-          ip: req.ip,
-          timestamp: new Date().toISOString()
-        });
+          refreshToken = AuthUtils.generateRefreshToken({
+            userId: user._id
+          });
+        } catch (tokenError) {
+          logError(`Token generation failed in Facebook callback for user ${user._id}: ${tokenError}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          return res.redirect(`${frontendUrl}/auth/login?error=token_generation_failed`);
+        }
 
-        return res.redirect(
-          `${socialConfig.redirectUrIs.facebook.success}?token=${accessToken}&refreshToken=${refreshToken}&provider=facebook`
-        );
+        // Update user data
+        try {
+          await User.findByIdAndUpdate(user._id, {
+            $push: {
+              refreshTokens: {
+                token: refreshToken,
+                createdAt: new Date(),
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              }
+            },
+            lastLogin: new Date(),
+            lastLoginMethod: 'facebook',
+            lastLoginIP: clientIP,
+            isOnline: true
+          });
+        } catch (updateError) {
+          logError(`Failed to update user data in Facebook callback for user ${user._id}: ${updateError}`);
+          // Don't fail the callback if update fails, just log it
+        }
 
-      } catch (tokenError) {
-        Logger.logError('Error generating tokens in Facebook callback', {
-          error: tokenError instanceof Error ? tokenError.message : 'Unknown error',
-          userId: req.user ? ((req.user as unknown) as SocialAuthUser)._id : 'unknown',
-          ip: req.ip,
-          timestamp: new Date().toISOString()
-        });
-        return res.redirect(`${socialConfig.redirectUrIs.facebook.error}?message=token_generation_failed`);
+        // Performance logging
+        const duration = Date.now() - startTime;
+        logInfo(`Facebook callback successful for user: ${user._id} in ${duration}ms from IP: ${clientIP}`);
+
+        // Enhanced redirect with proper URL encoding
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        const redirectUrl = new URL(`${frontendUrl}/auth/callback`);
+        redirectUrl.searchParams.set('provider', 'facebook');
+        redirectUrl.searchParams.set('token', accessToken);
+        redirectUrl.searchParams.set('refreshToken', refreshToken);
+        redirectUrl.searchParams.set('success', 'true');
+
+        return res.redirect(redirectUrl.toString());
+
+      } catch (callbackError) {
+        const duration = Date.now() - startTime;
+        logError(`Facebook callback processing failed in ${duration}ms from IP ${clientIP}: ${callbackError instanceof Error ? callbackError.message : 'Unknown error'}`);
+        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+        return res.redirect(`${frontendUrl}/auth/login?error=callback_processing_failed`);
       }
     });
+
   } catch (error) {
-    Logger.logError('Unexpected error in Facebook callback', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-      ip: req.ip,
-      timestamp: new Date().toISOString()
-    });
-    return res.redirect(`${socialConfig.redirectUrIs.facebook.error}?message=internal_error`);
+    const duration = Date.now() - startTime;
+    logError(`Facebook callback failed in ${duration}ms from IP ${clientIP}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    return res.redirect(`${frontendUrl}/auth/login?error=internal_error`);
   }
-};
+});

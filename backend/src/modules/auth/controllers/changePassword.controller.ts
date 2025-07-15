@@ -3,15 +3,17 @@ import rateLimit from 'express-rate-limit';
 import { asyncHandler, createError } from '../../../middlewares/error.middleware';
 import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
 import { AuthUtils } from '../../../utils/auth.utils';
+import { logError, logInfo, logWarn } from '../../../utils/logger';
 import User from '../../../models/user.model';
 
-// Rate limiting: 5 attempts per hour
+// Production-ready rate limiting: Stricter for password changes
 export const changePasswordRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 5,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: process.env.NODE_ENV === 'production' ? 3 : 10, // 3 in prod, 10 in dev
   message: {
     success: false,
-    message: 'Too many password change attempts. Please try again later.'
+    message: 'Too many password change attempts. Please try again later.',
+    code: 'PASSWORD_CHANGE_RATE_LIMIT_EXCEEDED'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -19,6 +21,9 @@ export const changePasswordRateLimit = rateLimit({
 
 // Password change controller
 export const changePassword = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+  const startTime = Date.now();
+  const clientIP = req.ip || 'unknown';
+
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
 
@@ -32,7 +37,7 @@ export const changePassword = asyncHandler(async (req: AuthenticatedRequest, res
       throw createError.forbidden('Account is not active');
     }
 
-    // ✅ Basic input checks
+    // ✅ Enhanced input validation
     if (!currentPassword || !newPassword) {
       throw createError.badRequest('Current and new password are required');
     }
@@ -62,49 +67,80 @@ export const changePassword = asyncHandler(async (req: AuthenticatedRequest, res
     }
 
     // ✅ Fetch user with password
-    const user = await User.findById(req.user._id).select('+password +lastPasswordChange');
+    const user = await User.findById(req.user._id).select('+password +lastPasswordChange +refreshTokens');
     if (!user || !user.password) {
       throw createError.notFound('User not found or invalid account');
     }
 
-    // ✅ Check current password
-    const isMatch = await AuthUtils.comparePassword(sanitizedCurrent, user.password);
-    if (!isMatch) {
-      // Development mode: skip password verification due to bcrypt issues
-      if (process.env.NODE_ENV === 'development') {
-        console.log('⚠️ DEVELOPMENT MODE: Skipping current password verification for change password');
-      } else {
-        throw createError.badRequest('Current password is incorrect');
-      }
+    // ✅ Enhanced current password verification
+    let isCurrentPasswordValid = false;
+    try {
+      isCurrentPasswordValid = await AuthUtils.comparePassword(sanitizedCurrent, user.password);
+    } catch (compareError) {
+      logError(`Password comparison error during change password for user ${user._id}: ${compareError}`);
+      throw createError.internal('Password verification failed. Please try again.');
     }
 
-    // ✅ Prevent frequent changes
-    const cooldown = 5 * 60 * 1000; // 5 mins
+    if (!isCurrentPasswordValid) {
+      logWarn(`Failed password change attempt for user ${user._id} from IP: ${clientIP}`);
+      throw createError.badRequest('Current password is incorrect');
+    }
+
+    // ✅ Enhanced rate limiting - check last password change time
+    const cooldown = 5 * 60 * 1000; // 5 minutes between password changes
     if (user.lastPasswordChange && !AuthUtils.isActionAllowed(user.lastPasswordChange, cooldown)) {
-      throw createError.tooManyRequests('Please wait before changing your password again');
+      const remainingTime = Math.ceil((cooldown - (Date.now() - user.lastPasswordChange.getTime())) / 1000 / 60);
+      throw createError.tooManyRequests(`Please wait ${remainingTime} minutes before changing password again`);
     }
 
-    // ✅ Hash and update
-    user.password = await AuthUtils.hashPassword(sanitizedNew);
-    user.refreshTokens = []; // Invalidate refresh tokens
+    // ✅ Enhanced password hashing
+    let hashedNewPassword: string;
+    try {
+      hashedNewPassword = await AuthUtils.hashPassword(sanitizedNew);
+    } catch (hashError) {
+      logError(`Password hashing failed during change password for user ${user._id}: ${hashError}`);
+      throw createError.internal('Password change failed. Please try again.');
+    }
+
+    // ✅ Update user password and metadata
+    user.password = hashedNewPassword;
     user.lastPasswordChange = new Date();
+    
+    // ✅ Invalidate all refresh tokens for security (force re-login on all devices)
+    user.refreshTokens = [];
+
+    // Clear any password reset tokens
     user.passwordResetToken = undefined;
     user.passwordResetTokenExpiry = undefined;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
 
-    await user.save();
+    try {
+      await user.save();
+      logInfo(`Password changed successfully for user ${user._id} (${user.username}) from IP: ${clientIP}`);
+    } catch (saveError) {
+      logError(`Failed to save password change for user ${user._id}: ${saveError}`);
+      throw createError.internal('Password change failed. Please try again.');
+    }
 
-    console.log(`🔒 Password changed for user: ${user._id} at ${new Date().toISOString()}`);
+    // Performance logging
+    const duration = Date.now() - startTime;
+    logInfo(`Password change completed in ${duration}ms for user: ${user.username}`);
 
+    // ✅ Enhanced response
     res.status(200).json({
       success: true,
-      message: 'Password changed successfully. Please log in again with your new password.'
+      message: 'Password changed successfully. Please log in again on all devices.',
+      data: {
+        changedAt: user.lastPasswordChange,
+        tokensInvalidated: true,
+        requiresReAuth: true
+      }
     });
 
-  } catch (err) {
-    const error = err instanceof Error ? err.message : 'Unknown error';
-    console.error('❌ Password change error:', error);
-
-    // Rethrow for asyncHandler to handle (and middleware to respond)
-    throw err;
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logError(`Password change failed in ${duration}ms from IP ${clientIP}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
   }
 });

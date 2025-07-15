@@ -4,6 +4,7 @@ import User from '../models/user.model';
 import { IUser } from '../models/user.model';
 import { JWTPayload } from '../types';
 import { logError, logDebug } from '../utils/logger';
+import { config } from '../config';
 
 export interface AuthenticatedRequest extends Request {
   user?: IUser;
@@ -80,7 +81,8 @@ export const authenticate = async (
       return;
     }
 
-    if (!user.isEmailVerified) {
+    // Only check email verification if it's required in config
+    if (config.FEATURES.EMAIL_VERIFICATION_REQUIRED && !user.isEmailVerified) {
       recordAuthAttempt(clientIP, false);
       logDebug(`Email not verified for user ${user._id} in request ${requestId}`);
       res.status(401).json({ success: false, message: 'Email not verified', requiresVerification: true });

@@ -6,6 +6,9 @@ import { EnergyManager } from '../utils/energy.utils';
 export class MatchmakingSocket {
   private authManager: SocketAuthManager;
   private io: SocketIOServer;
+  // Track active intervals to prevent memory leaks
+  private activeIntervals: Map<string, NodeJS.Timeout> = new Map();
+  private activeTimeouts: Map<string, NodeJS.Timeout> = new Map();
 
   constructor(io: SocketIOServer, authManager: SocketAuthManager) {
     this.io = io;
@@ -260,11 +263,14 @@ export class MatchmakingSocket {
    * Set up periodic match checking for a player
    */
   private setupPeriodicMatchChecking(userId: string): void {
+    // Clear any existing interval for this user
+    this.clearUserIntervals(userId);
+
     const checkInterval = setInterval(() => {
       try {
         // Check if player is still in queue
         if (!MatchmakingManager.isPlayerInQueue(userId)) {
-          clearInterval(checkInterval);
+          this.clearUserIntervals(userId);
           return;
         }
 
@@ -272,19 +278,22 @@ export class MatchmakingSocket {
         const match = MatchmakingManager.findMatch(userId);
         
         if (match) {
-          clearInterval(checkInterval);
+          this.clearUserIntervals(userId);
           this.handleMatchFound(match);
         }
 
       } catch (error) {
         console.error('Periodic match checking error:', error);
-        clearInterval(checkInterval);
+        this.clearUserIntervals(userId);
       }
     }, 2000); // Check every 2 seconds
 
+    // Store the interval
+    this.activeIntervals.set(userId, checkInterval);
+
     // Clear interval after 5 minutes (max wait time)
-    setTimeout(() => {
-      clearInterval(checkInterval);
+    const timeout = setTimeout(() => {
+      this.clearUserIntervals(userId);
       
       // Remove from queue if still there and notify
       if (MatchmakingManager.isPlayerInQueue(userId)) {
@@ -298,23 +307,37 @@ export class MatchmakingSocket {
         }
       }
     }, 300000); // 5 minutes
+
+    // Store the timeout
+    this.activeTimeouts.set(userId, timeout);
   }
 
   /**
-   * Handle player disconnect during matchmaking
+   * Clear all intervals and timeouts for a user
+   */
+  private clearUserIntervals(userId: string): void {
+    const interval = this.activeIntervals.get(userId);
+    if (interval) {
+      clearInterval(interval);
+      this.activeIntervals.delete(userId);
+    }
+
+    const timeout = this.activeTimeouts.get(userId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.activeTimeouts.delete(userId);
+    }
+  }
+
+  /**
+   * Handle player disconnect - clean up intervals
+   */
+  /**
+   * Handle player disconnect - clean up intervals
    */
   handlePlayerDisconnect(userId: string): void {
-    try {
-      // Remove from matchmaking queue
-      const removed = MatchmakingManager.removeFromQueue(userId);
-      
-      if (removed) {
-        console.log(`🚪 Player ${userId} removed from matchmaking queue due to disconnect`);
-      }
-
-    } catch (error) {
-      console.error('Handle player disconnect error:', error);
-    }
+    this.clearUserIntervals(userId);
+    MatchmakingManager.removeFromQueue(userId);
   }
 
   /**

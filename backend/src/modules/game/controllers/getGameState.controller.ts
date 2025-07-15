@@ -58,7 +58,7 @@ export const getGameState = asyncHandler(async (req: AuthenticatedRequest, res: 
             players: game.players,
             board: game.board,
             currentPlayer: game.currentPlayer,
-            gameStatus: game.gameStatus,
+            gameStatus: game.status,
             winner: game.winner,
             createdAt: game.createdAt,
             updatedAt: game.updatedAt
@@ -92,7 +92,7 @@ export const getGameState = asyncHandler(async (req: AuthenticatedRequest, res: 
             players: game.players,
             board: game.board,
             currentPlayer: game.currentPlayer,
-            gameStatus: game.gameStatus,
+            gameStatus: game.status,
             winner: game.winner,
             createdAt: game.createdAt,
             updatedAt: game.updatedAt

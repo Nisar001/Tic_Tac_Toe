@@ -1,132 +1,235 @@
 import { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
+import mongoose from 'mongoose';
 import { asyncHandler, createError } from '../../../middlewares/error.middleware';
 import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
 import { AuthUtils } from '../../../utils/auth.utils';
-import { socketManager } from '../../../server';
+import { logInfo, logWarn, logError } from '../../../utils/logger';
 import Game from '../../../models/game.model';
 import User from '../../../models/user.model';
 
-// Rate limiting for game forfeiting - 10 forfeits per hour
+// Import socket manager with fallback handling
+let socketManager: any = null;
+try {
+  socketManager = require('../../../socket/index')?.socketManager || null;
+} catch (error) {
+  // Socket manager not available, will use REST fallback
+  socketManager = null;
+}
+
+// Production-ready rate limiting for game forfeiting
 export const forfeitGameRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000,
-  max: 10,
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: process.env.NODE_ENV === 'production' ? 5 : 15, // 5 in prod, 15 in dev
   message: {
     success: false,
     message: 'Too many game forfeits. Please try again later.',
+    code: 'FORFEIT_RATE_LIMIT_EXCEEDED'
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
 export const forfeitGame = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
-  if (!req.user) {
-    throw createError.unauthorized('Authentication required');
-  }
+  const startTime = Date.now();
+  const clientIP = req.ip || 'unknown';
 
-  const { roomId } = req.params;
-  const userId = (req.user as { _id: string | { toString(): string } })._id.toString();
-
-  // User validation
-  if (req.user.isDeleted || req.user.isBlocked) {
-    throw createError.forbidden('Account is not active');
-  }
-
-  // Validate roomId
-  if (!roomId || typeof roomId !== 'string') {
-    throw createError.badRequest('Room ID is required and must be a string');
-  }
-
-  const sanitizedRoomId = AuthUtils.validateAndSanitizeInput(roomId, 50);
-  if (sanitizedRoomId.length < 3 || !/^[a-zA-Z0-9_-]+$/.test(sanitizedRoomId)) {
-    throw createError.badRequest('Invalid room ID format');
-  }
-
-  // Forfeit cooldown check
-  const cooldownMs = 5 * 60 * 1000;
-  if (
-    req.user.lastForfeitTime &&
-    !AuthUtils.isActionAllowed(
-      typeof req.user.lastForfeitTime === 'string'
-        ? new Date(req.user.lastForfeitTime)
-        : req.user.lastForfeitTime,
-      cooldownMs
-    )
-  ) {
-    throw createError.tooManyRequests('Please wait before forfeiting another game');
-  }
-
-  // Find active game
-  const game = await Game.findOne({
-    roomId: sanitizedRoomId,
-    status: { $in: ['waiting', 'active', 'paused'] },
-    $or: [{ 'players.player1': userId }, { 'players.player2': userId }],
-  });
-
-  if (!game) {
-    throw createError.notFound('Game not found or you are not a participant');
-  }
-
-  // Prevent double forfeits
-  if (['completed', 'forfeited', 'abandoned', 'cancelled'].includes(game.status)) {
-    throw createError.badRequest('Game is already finished');
-  }
-
-  // Determine forfeiting and winning players
-  const isPlayer1 = game.players?.player1?.toString() === userId;
-  const forfeitingKey = isPlayer1 ? 'player1' : 'player2';
-  const winningKey = isPlayer1 ? 'player2' : 'player1';
-  const winnerId = game.players?.[winningKey];
-
-  // Update game status
-  game.status = 'abandoned';
-  game.winner = winnerId;
-  game.result = 'abandoned';
-  game.endedAt = new Date();
-  await game.save();
-
-  // Update stats: forfeiter
-  req.user.stats = req.user.stats || { wins: 0, losses: 0, gamesPlayed: 0 };
-  req.user.stats.losses += 1;
-  req.user.stats.gamesPlayed += 1;
-  req.user.lastForfeitTime = new Date();
-  await req.user.save();
-
-  // Update stats: winner
-  const winner = await User.findById(winnerId);
-  if (winner) {
-    winner.stats = winner.stats || { wins: 0, losses: 0, gamesPlayed: 0 };
-    winner.stats.wins += 1;
-    winner.stats.gamesPlayed += 1;
-    await winner.save();
-  }
-
-  // Optional socket notification
-  if (socketManager?.getGameSocket) {
-    try {
-      const gameSocket = socketManager.getGameSocket();
-      if (typeof gameSocket?.handleGameForfeit === 'function') {
-        gameSocket.handleGameForfeit(sanitizedRoomId, userId, game);
-      }
-    } catch (socketError) {
-      console.error('Socket forfeit notify error:', socketError);
-      // Don't throw - already successfully forfeited
+  try {
+    // Enhanced authentication validation
+    if (!req.user) {
+      logWarn(`Game forfeit attempt without authentication from IP: ${clientIP}`);
+      throw createError.unauthorized('Authentication required');
     }
+
+    // Enhanced account status checks
+    if (req.user.isDeleted) {
+      logWarn(`Game forfeit attempt on deleted account: ${req.user._id} from IP: ${clientIP}`);
+      throw createError.forbidden('Account has been deactivated');
+    }
+
+    if (req.user.isBlocked) {
+      logWarn(`Game forfeit attempt on blocked account: ${req.user.email} from IP: ${clientIP}`);
+      throw createError.forbidden('Account has been blocked');
+    }
+
+    const { roomId } = req.params;
+    const userId = req.user._id.toString();
+
+    // Enhanced room ID validation
+    if (!roomId || typeof roomId !== 'string') {
+      logWarn(`Game forfeit attempt with invalid room ID from user: ${req.user.username} IP: ${clientIP}`);
+      throw createError.badRequest('Room ID is required and must be a string');
+    }
+
+    const sanitizedRoomId = AuthUtils.validateAndSanitizeInput(roomId, 50);
+    if (sanitizedRoomId.length < 3 || !/^[a-zA-Z0-9_-]+$/.test(sanitizedRoomId)) {
+      logWarn(`Game forfeit attempt with malformed room ID: ${roomId} from user: ${req.user.username} IP: ${clientIP}`);
+      throw createError.badRequest('Invalid room ID format');
+    }
+
+    // Enhanced forfeit cooldown check
+    const cooldownMs = 5 * 60 * 1000; // 5 minutes
+    if (req.user.lastForfeitTime) {
+      const timeSinceLastForfeit = Date.now() - new Date(req.user.lastForfeitTime).getTime();
+      if (timeSinceLastForfeit < cooldownMs) {
+        const remainingTime = Math.ceil((cooldownMs - timeSinceLastForfeit) / 1000);
+        logWarn(`Game forfeit attempt during cooldown from user: ${req.user.username} (${remainingTime}s remaining) IP: ${clientIP}`);
+        throw createError.tooManyRequests(`Please wait ${remainingTime} seconds before forfeiting another game`);
+      }
+    }
+
+    // Enhanced game loading with validation
+    const game = await Game.findOne({ room: sanitizedRoomId }).populate('players.player1 players.player2', 'username email');
+    if (!game) {
+      logWarn(`Game forfeit attempt on non-existent game: ${sanitizedRoomId} from user: ${req.user.username} IP: ${clientIP}`);
+      throw createError.notFound('Game not found');
+    }
+
+    // Enhanced player validation
+    const player1Id = game.players?.player1?._id?.toString();
+    const player2Id = game.players?.player2?._id?.toString();
+    const isPlayer = [player1Id, player2Id].includes(userId);
+
+    if (!isPlayer) {
+      logWarn(`Game forfeit attempt by non-player: ${req.user.username} in game: ${sanitizedRoomId} IP: ${clientIP}`);
+      throw createError.forbidden('You are not a player in this game');
+    }
+
+    // Enhanced game state validation
+    if (game.status === 'completed') {
+      logWarn(`Game forfeit attempt on completed game: ${sanitizedRoomId} from user: ${req.user.username} IP: ${clientIP}`);
+      throw createError.badRequest('Cannot forfeit a completed game');
+    }
+
+    if (game.status !== 'active' && game.status !== 'waiting') {
+      logWarn(`Game forfeit attempt on invalid game state: ${sanitizedRoomId} status: ${game.status} from user: ${req.user.username} IP: ${clientIP}`);
+      throw createError.badRequest(`Cannot forfeit game in ${game.status} state`);
+    }
+
+    // Determine winner and loser
+    const forfeitingPlayer = userId;
+    const winningPlayer = forfeitingPlayer === player1Id ? player2Id : player1Id;
+
+    // Start transaction for atomic updates
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Update game with forfeit result
+      game.status = 'completed';
+      game.result = 'abandoned';
+      game.winner = winningPlayer ? new mongoose.Types.ObjectId(winningPlayer) : undefined;
+      game.endedAt = new Date();
+      
+      // Add forfeit move to history
+      game.moves.push({
+        player: new mongoose.Types.ObjectId(forfeitingPlayer),
+        position: { row: -1, col: -1 }, // Special position for forfeit
+        symbol: 'X', // Use placeholder symbol
+        timestamp: new Date()
+      });
+
+      await game.save({ session });
+
+      // Update player statistics
+      const updatePromises = [];
+
+      // Update forfeiting player stats (penalty)
+      updatePromises.push(
+        User.findByIdAndUpdate(forfeitingPlayer, {
+          $inc: { 
+            'stats.gamesLost': 1,
+            'stats.gamesForfeited': 1,
+            'stats.totalGames': 1,
+            'energy': -2 // Energy penalty for forfeiting
+          },
+          $set: { 
+            'lastForfeitTime': new Date()
+          }
+        }, { session })
+      );
+
+      // Update winning player stats (if there is an opponent)
+      if (winningPlayer) {
+        updatePromises.push(
+          User.findByIdAndUpdate(winningPlayer, {
+            $inc: { 
+              'stats.gamesWon': 1,
+              'stats.totalGames': 1,
+              'totalXP': 5, // Reduced XP for forfeit win
+              'energy': 1 // Small energy bonus
+            }
+          }, { session })
+        );
+      }
+
+      await Promise.all(updatePromises);
+
+      await session.commitTransaction();
+
+      // Socket notification with enhanced error handling
+      if (socketManager && typeof socketManager.emitToRoom === 'function') {
+        try {
+          const forfeitData = {
+            gameId: game._id,
+            room: sanitizedRoomId,
+            forfeitedBy: forfeitingPlayer,
+            winner: winningPlayer,
+            reason: 'forfeit',
+            timestamp: new Date()
+          };
+          
+          socketManager.emitToRoom(sanitizedRoomId, 'game_forfeited', forfeitData);
+          logInfo(`Socket notification sent for game forfeit: ${sanitizedRoomId}`);
+        } catch (socketError) {
+          logError(`Socket error during forfeit notification for room ${sanitizedRoomId}: ${socketError}`);
+          // Continue - socket failure shouldn't break forfeit flow
+        }
+      }
+
+      // Performance logging
+      const duration = Date.now() - startTime;
+      logInfo(`Game forfeited in ${duration}ms: ${sanitizedRoomId} by user ${req.user.username} from IP: ${clientIP}`);
+
+      // Enhanced response
+      res.status(200).json({
+        success: true,
+        message: 'Game forfeited successfully',
+        data: {
+          game: {
+            id: game._id,
+            room: game.room,
+            status: game.status,
+            result: game.result,
+            winner: game.winner,
+            forfeitedBy: forfeitingPlayer,
+            endTime: game.endedAt,
+            moves: game.moves
+          },
+          forfeit: {
+            forfeitedBy: forfeitingPlayer,
+            winner: winningPlayer,
+            timestamp: new Date(),
+            penalty: {
+              energyLost: 2,
+              xpLost: 0,
+              cooldownMinutes: 5
+            }
+          },
+          nextAvailableForfeit: new Date(Date.now() + cooldownMs).toISOString()
+        }
+      });
+
+    } catch (transactionError) {
+      await session.abortTransaction();
+      throw transactionError;
+    } finally {
+      session.endSession();
+    }
+
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    logError(`Game forfeit failed in ${duration}ms from IP ${clientIP}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw error;
   }
-
-  console.log(
-    `Game forfeited: ${sanitizedRoomId} by ${userId} at ${new Date().toISOString()}`
-  );
-
-  res.json({
-    success: true,
-    message: 'Game forfeited successfully',
-    data: {
-      gameId: game._id,
-      roomId: sanitizedRoomId,
-      forfeitedBy: userId,
-      winner: game.winner,
-      forfeitedAt: game.endedAt,
-    },
-  });
 });

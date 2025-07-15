@@ -52,6 +52,17 @@ export class AuthUtils {
     }
   }
 
+  static generateTokenPair(userId: string, email: string): { accessToken: string; refreshToken: string } {
+    const accessToken = this.generateAccessToken({ userId, email });
+    const refreshToken = this.generateRefreshToken({ userId });
+    return { accessToken, refreshToken };
+  }
+
+  static extractTokenFromHeader(authHeader?: string): string | null {
+    if (!authHeader?.startsWith('Bearer ')) return null;
+    return authHeader.substring(7);
+  }
+
   static generateEmailVerificationToken(): string {
     return crypto.randomBytes(32).toString('hex');
   }
@@ -77,6 +88,84 @@ export class AuthUtils {
   static isValidUsername(username: string): boolean {
     const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/;
     return usernameRegex.test(username);
+  }
+
+  static isValidUsernameSecure(username: string): { valid: boolean; reason?: string } {
+    if (!username || typeof username !== 'string') {
+      return { valid: false, reason: 'Username is required' };
+    }
+    
+    if (username.length < 3) {
+      return { valid: false, reason: 'Username must be at least 3 characters long' };
+    }
+    
+    if (username.length > 20) {
+      return { valid: false, reason: 'Username cannot exceed 20 characters' };
+    }
+    
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
+    if (!usernameRegex.test(username)) {
+      return { valid: false, reason: 'Username can only contain letters, numbers and underscores' };
+    }
+    
+    return { valid: true };
+  }
+
+  static validateAndSanitizeInput(input: string, maxLength: number = 100): string {
+    if (!input || typeof input !== 'string') {
+      throw new Error('Input is required and must be a string');
+    }
+    
+    const sanitized = input.trim().replace(/[<>]/g, '');
+    
+    if (sanitized.length > maxLength) {
+      throw new Error(`Input cannot exceed ${maxLength} characters`);
+    }
+    
+    return sanitized;
+  }
+
+  static isSuspiciousEmail(email: string): boolean {
+    const suspiciousPatterns = [
+      /10minutemail/i,
+      /tempmail/i,
+      /guerrillamail/i,
+      /mailinator/i,
+      /throwaway/i
+    ];
+    
+    return suspiciousPatterns.some(pattern => pattern.test(email));
+  }
+
+  static isCommonPassword(password: string): boolean {
+    const commonPasswords = [
+      'password', '123456', 'password123', 'admin', 'qwerty',
+      'letmein', 'welcome', '12345678', 'abc123', 'password1'
+    ];
+    
+    return commonPasswords.includes(password.toLowerCase());
+  }
+
+  static isActionAllowed(lastAction: Date | null, cooldownMs: number): boolean {
+    return !lastAction || Date.now() - lastAction.getTime() >= cooldownMs;
+  }
+
+  static generateSecureToken(length = 32): string {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  }
+
+  static verifyToken(token: string, type: 'access' | 'refresh' = 'access'): JWTPayload | JwtPayload {
+    const secret = type === 'access' ? config.JWT_SECRET : config.JWT_REFRESH_SECRET;
+    try {
+      const decoded = jwt.verify(token, secret);
+      if (typeof decoded === 'string') {
+        throw new Error('Invalid token payload');
+      }
+      return decoded;
+    } catch {
+      throw new Error('Invalid token');
+    }
   }
 
   static isValidPhoneNumber(phoneNumber: string): boolean {
@@ -134,11 +223,6 @@ export class AuthUtils {
     }
   }
 
-  static extractTokenFromHeader(authHeader?: string): string | null {
-    if (!authHeader?.startsWith('Bearer ')) return null;
-    return authHeader.substring(7);
-  }
-
   static generateVerificationCode(length = 6): string {
     const digits = '0123456789';
     return Array.from({ length }, () => digits[Math.floor(Math.random() * digits.length)]).join('');
@@ -173,138 +257,6 @@ export class AuthUtils {
       currentLevelXP: totalXP - xpForPreviousLevels,
       nextLevelXP: this.calculateXPForLevel(currentLevel),
     };
-  }
-
-  static generateTokenPair(
-    userId: string,
-    email: string
-  ): { accessToken: string; refreshToken: string } {
-    const payload = { userId, email };
-    return {
-      accessToken: this.generateAccessToken(payload),
-      refreshToken: this.generateRefreshToken({ userId }),
-    };
-  }
-
-  static generateSecureToken(length = 32): string {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-  }
-
-  static verifyToken(token: string, type: 'access' | 'refresh' = 'access'): JWTPayload | JwtPayload {
-    const secret = type === 'access' ? config.JWT_SECRET : config.JWT_REFRESH_SECRET;
-    try {
-      const decoded = jwt.verify(token, secret);
-      if (typeof decoded === 'string') {
-        throw new Error('Invalid token payload');
-      }
-      return decoded;
-    } catch {
-      throw new Error('Invalid token');
-    }
-  }
-
-  static isSuspiciousEmail(email: string): boolean {
-    const suspiciousPatterns = [
-      /\+.*\+/, /\.{2,}/, /@.*@/, /[<>\"']/g, /^\d+@/, /@\d+$/, /(.)\1{4,}/
-    ];
-    return suspiciousPatterns.some((pattern) => pattern.test(email));
-  }
-
-  static validateAndSanitizeInput(input: string, maxLength = 255): string {
-    if (typeof input !== 'string') throw new Error('Input must be a string');
-    return input.trim().replace(/[<>\"'&]/g, '').substring(0, maxLength);
-  }
-
-  static isCommonPassword(password: string): boolean {
-    const commonPasswords = [
-      'password', 'password123', '123456', '12345678', 'qwerty',
-      'abc123', 'password1', 'admin', 'root', 'user', 'guest',
-      'welcome', 'login', 'passw0rd', '1234567890'
-    ];
-    return commonPasswords.includes(password.toLowerCase());
-  }
-
-  static isValidUsernameSecure(username: string): { valid: boolean; reason?: string } {
-    if (!this.isValidUsername(username)) {
-      return { valid: false, reason: 'Username must be 3-20 characters with letters, numbers, and underscores only' };
-    }
-
-    const reservedWords = [
-      'admin', 'root', 'user', 'guest', 'test', 'demo', 'system',
-      'api', 'www', 'mail', 'ftp', 'support', 'help', 'info'
-    ];
-
-    if (reservedWords.includes(username.toLowerCase())) {
-      return { valid: false, reason: 'Username cannot be a reserved word' };
-    }
-
-    if (/^\d+$/.test(username)) {
-      return { valid: false, reason: 'Username cannot be only numbers' };
-    }
-
-    return { valid: true };
-  }
-
-  static generateSessionId(): string {
-    return crypto.randomBytes(32).toString('hex');
-  }
-
-  static isActionAllowed(lastAction: Date | null, cooldownMs: number): boolean {
-    return !lastAction || Date.now() - lastAction.getTime() >= cooldownMs;
-  }
-
-  static async testPasswordHashing(password: string): Promise<{ hash: string; isValid: boolean }> {
-    try {
-      console.log('🧪 Testing password hashing...');
-      const salt = await bcrypt.genSalt(12);
-      const hash = await bcrypt.hash(password, salt);
-      const isValid = await bcrypt.compare(password, hash);
-      
-      console.log('- Generated hash:', hash);
-      console.log('- Hash verification:', isValid);
-      
-      return { hash, isValid };
-    } catch (error) {
-      console.error('❌ Password hashing test error:', error);
-      throw error;
-    }
-  }
-
-  // Debugging helper method to generate a fresh hash for testing
-  static async generateTestHash(password: string): Promise<string> {
-    console.log('🔧 Generating fresh hash for password:', JSON.stringify(password));
-    const salt = await bcrypt.genSalt(12);
-    const hash = await bcrypt.hash(password, salt);
-    console.log('Generated hash:', hash);
-    
-    // Test the hash immediately
-    const testResult = await bcrypt.compare(password, hash);
-    console.log('Fresh hash test result:', testResult);
-    
-    return hash;
-  }
-
-  // Emergency password reset helper for debugging
-  static async createDebugHash(): Promise<void> {
-    console.log('🚨 Creating debug hashes for common passwords...');
-    
-    const testPasswords = [
-      'SecurePass123!',
-      'password123',
-      'admin123',
-      'test123',
-      '123456'
-    ];
-    
-    for (const pwd of testPasswords) {
-      const hash = await bcrypt.hash(pwd, 12);
-      console.log(`Password: "${pwd}" -> Hash: ${hash}`);
-      
-      // Verify each one
-      const isValid = await bcrypt.compare(pwd, hash);
-      console.log(`Verification: ${isValid}\n`);
-    }
   }
 
   // Utility method to create a fresh password hash for testing/debugging
@@ -374,5 +326,3 @@ export class AuthUtils {
     }
   }
 }
-
-export default AuthUtils;
