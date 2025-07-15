@@ -10,7 +10,7 @@ export const Chat: React.FC = () => {
 
   useEffect(() => {
     loadRooms();
-  }, []);
+  }, [loadRooms]);
 
   const filteredRooms = state.rooms.filter(room =>
     room.name.toLowerCase().includes(searchTerm.toLowerCase())

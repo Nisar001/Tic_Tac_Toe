@@ -39,6 +39,7 @@ REACT_APP_SOCKET_URL=https://tic-tac-toe-uf5h.onrender.com
 REACT_APP_ENV=production
 GENERATE_SOURCEMAP=false
 NODE_VERSION=18
+CI=false
 ```
 
 **For Social Authentication (Optional):**

@@ -6,7 +6,7 @@
   publish = "build/"
   
   # Default build command
-  command = "npm run build"
+  command = "CI=false npm run build"
 
 [build.environment]
   # Node version for build
@@ -14,6 +14,9 @@
   
   # Skip source maps for production
   GENERATE_SOURCEMAP = "false"
+  
+  # Don't treat warnings as errors
+  CI = "false"
 
 # Redirects for React Router (SPA)
 [[redirects]]

@@ -45,7 +45,7 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
         socketService.disconnect();
       }
     };
-  }, []);
+  }, [state.socket]);
 
   const connect = () => {
     if (!state.socket || !state.isConnected) {
