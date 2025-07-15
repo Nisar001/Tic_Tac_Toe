@@ -1,7 +1,7 @@
 import * as jwt from 'jsonwebtoken';
 import { JwtPayload, Secret } from 'jsonwebtoken';
 import * as crypto from 'crypto';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { config } from '../config';
 import { JWTPayload } from '../types';
 
@@ -195,26 +195,37 @@ export class AuthUtils {
     try {
       // Validate inputs
       if (!password || !hash) {
-        console.log('❌ Invalid password or hash input');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ Invalid password or hash input');
+        }
         return false;
       }
 
       if (typeof password !== 'string' || typeof hash !== 'string') {
-        console.log('❌ Password or hash is not a string');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ Password or hash is not a string');
+        }
         return false;
       }
 
       if (hash.length !== 60 || !hash.startsWith('$2')) {
-        console.log('❌ Invalid bcrypt hash format');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('❌ Invalid bcrypt hash format');
+        }
         return false;
       }
 
-      console.log('🔑 AuthUtils.comparePassword:');
-      console.log('- Password length:', password.length);
-      console.log('- Hash format valid:', /^\$2[aby]\$\d+\$/.test(hash));
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔑 AuthUtils.comparePassword:');
+        console.log('- Password length:', password.length);
+        console.log('- Hash format valid:', /^\$2[aby]\$\d+\$/.test(hash));
+      }
       
       const result = await bcrypt.compare(password, hash);
-      console.log('- Bcrypt comparison result:', result);
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('- Bcrypt comparison result:', result);
+      }
       
       return result;
     } catch (error) {

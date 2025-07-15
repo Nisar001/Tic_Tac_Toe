@@ -1,5 +1,4 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import * as bcrypt from 'bcrypt';
 import { logError, logDebug } from '../utils/logger';
 
 export interface IUser extends Document {
@@ -70,7 +69,6 @@ export interface IUser extends Document {
   }>;
   createdAt: Date;
   updatedAt: Date;
-  comparePassword(candidatePassword: string): Promise<boolean>;
   calculateWinRate(): number;
   calculateLevel(): number;
   addXP(xp: number): void;
@@ -195,25 +193,6 @@ UserSchema.index({ level: 1 });
 UserSchema.index({ isOnline: 1 });
 UserSchema.index({ 'stats.winRate': -1 });
 
-// Pre-save middleware to hash password with enhanced error handling
-UserSchema.pre('save', async function(next) {
-  try {
-    if (!this.isModified('password') || !this.password) return next();
-    
-    // Validate password strength
-    if (this.password.length < 6) {
-      return next(new Error('Password must be at least 6 characters long'));
-    }
-    
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    logError(`Password hashing error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    next(error as Error);
-  }
-});
-
 // Pre-save middleware to calculate win rate and level with error handling
 UserSchema.pre('save', function(next) {
   try {
@@ -237,25 +216,6 @@ UserSchema.pre('save', function(next) {
 });
 
 // Instance methods with comprehensive error handling
-UserSchema.methods.comparePassword = async function(candidatePassword: string): Promise<boolean> {
-  try {
-    if (!this.password || !candidatePassword) {
-      logDebug(`Password comparison failed: missing password data for user ${this.email}`);
-      return false;
-    }
-    
-    if (typeof candidatePassword !== 'string') {
-      logError(`Invalid candidate password type for user ${this.email}`);
-      return false;
-    }
-    
-    return await bcrypt.compare(candidatePassword, this.password);
-  } catch (error) {
-    logError(`Password comparison error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    return false;
-  }
-};
-
 UserSchema.methods.calculateWinRate = function(): number {
   try {
     if (!this.stats || typeof this.stats.gamesPlayed !== 'number' || this.stats.gamesPlayed === 0) {
