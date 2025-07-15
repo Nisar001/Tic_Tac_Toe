@@ -1,13 +1,13 @@
 // Basic type definitions
-export type GameStatus = 'waiting' | 'in_progress' | 'completed' | 'abandoned';
-export type GameType = 'quick' | 'ranked' | 'custom' | 'tournament';
+export type GameStatus = 'waiting' | 'active' | 'completed' | 'abandoned';
+export type GameType = 'classic' | 'blitz' | 'ranked' | 'custom';
 export type Difficulty = 'easy' | 'medium' | 'hard';
-export type CellValue = '' | 'X' | 'O';
+export type CellValue = '' | 'X' | 'O' | null;
 export type WinCondition = 'row' | 'column' | 'diagonal' | 'none';
 
 export interface User {
-  id: string;
-  _id?: string;
+  id?: string;
+  _id: string;
   username: string;
   email: string;
   avatar?: string;
@@ -20,15 +20,17 @@ export interface User {
   lastEnergyRegenTime?: string;
   level: number;
   xp?: number;
-  totalXP?: number;
+  totalXP: number;
   stats: UserStats;
   preferences?: UserPreferences;
-  provider?: 'manual' | 'google' | 'facebook' | 'instagram' | 'twitter';
+  provider: 'manual' | 'google' | 'facebook' | 'instagram' | 'twitter';
   isOnline?: boolean;
   lastSeen?: string;
   bio?: string;
   phoneNumber?: string;
   dateOfBirth?: string;
+  isDeleted?: boolean;
+  isBlocked?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,8 +58,8 @@ export interface UserPreferences {
 }
 
 export interface Game {
-  id: string;
-  _id?: string;
+  id?: string;
+  _id: string;
   gameId?: string;
   room: string;
   roomId?: string; // Alias for room
@@ -65,14 +67,14 @@ export interface Game {
   board: CellValue[][];
   currentPlayer: 'X' | 'O';
   players: {
-    player1: GamePlayer;
-    player2?: GamePlayer;
+    player1: string | GamePlayer;
+    player2?: string | GamePlayer | null;
   };
   winner?: string;
   winCondition?: WinCondition;
   result?: 'win' | 'draw' | 'abandoned' | null;
   moves: GameMove[];
-  gameMode?: 'classic' | 'blitz' | 'ranked' | 'custom';
+  gameMode: 'classic' | 'blitz' | 'ranked' | 'custom';
   gameType?: GameType; // Alias for gameMode
   isPrivate?: boolean;
   maxPlayers?: number;
@@ -83,6 +85,8 @@ export interface Game {
   startedAt?: string;
   endedAt?: string;
   xpAwarded?: boolean;
+  canJoin?: boolean;
+  moveCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,26 +126,38 @@ export interface ChatMessage {
   id: string;
   roomId: string;
   userId: string;
+  senderId?: string;
   username: string;
+  senderUsername?: string;
   message: string;
   timestamp: string;
   type: 'text' | 'system' | 'game';
   metadata?: Record<string, any>;
+  edited?: boolean;
+  editedAt?: string;
 }
 
 export interface ChatRoom {
   id: string;
   name: string;
-  type: 'game' | 'global' | 'private';
+  type: 'game' | 'global' | 'private' | 'direct';
   participants: ChatParticipant[];
+  participantCount?: number;
+  maxParticipants?: number | null;
   lastMessage?: ChatMessage;
+  lastActivity?: string | null;
+  description?: string;
+  isPrivate?: boolean;
+  hasUnreadMessages?: boolean;
   createdAt: string;
+  createdBy?: string | null;
   isActive: boolean;
 }
 
 export interface ChatParticipant {
   id: string;
   username: string;
+  avatar?: string;
   isOnline: boolean;
   joinedAt: string;
   role: 'member' | 'moderator' | 'admin';
@@ -250,7 +266,6 @@ export interface GameMoveRequest {
 }
 
 export interface SendMessageRequest {
-  roomId: string;
   message: string;
   type?: 'text' | 'system';
 }
@@ -336,26 +351,10 @@ export interface JoinGameRequest {
   password?: string;
 }
 
-// Chat API Types
-export interface SendMessageRequest {
-  message: string;
-  type?: 'text' | 'system';
-}
-
-export interface ChatRoom {
-  id: string;
-  name: string;
-  description?: string;
-  isPrivate: boolean;
-  userCount: number;
-  maxUsers: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 // Matchmaking Types
 export interface MatchmakingRequest {
-  gameType: GameType;
+  gameMode: 'classic' | 'blitz' | 'ranked' | 'custom';
+  gameType?: GameType;
   difficulty?: Difficulty;
   preferredOpponent?: string;
 }
@@ -477,7 +476,7 @@ export interface GameContextType {
   makeMove: (request: GameMoveRequest) => Promise<Game>;
   forfeitGame: (roomId: string) => Promise<Game | undefined>;
   getGameState: (roomId: string) => Promise<Game>;
-  getActiveGames: () => Promise<Game[]>;
+  getActiveGames: () => Promise<any>;
   getUserStats: () => Promise<UserStats>;
   getLeaderboard: (page?: number, limit?: number) => Promise<LeaderboardEntry[]>;
 }

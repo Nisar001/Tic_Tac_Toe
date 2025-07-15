@@ -30,7 +30,7 @@ export interface AdminStats {
 
 export interface AdminGame {
   id: string;
-  status: 'waiting' | 'in_progress' | 'completed' | 'abandoned';
+  status: 'waiting' | 'active' | 'completed' | 'abandoned';
   players: {
     id: string;
     username: string;

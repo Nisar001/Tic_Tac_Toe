@@ -27,7 +27,7 @@ const GameInfo: React.FC<GameInfoProps> = ({ game, currentUser, onForfeit }) => 
         <TrophyIcon className="w-5 h-5 text-yellow-500" />
         <span className="font-medium">Status:</span>
         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-          game.status === 'in_progress' ? 'bg-green-100 text-green-800' :
+          game.status === 'active' ? 'bg-green-100 text-green-800' :
           game.status === 'completed' ? 'bg-blue-100 text-blue-800' :
           game.status === 'waiting' ? 'bg-yellow-100 text-yellow-800' :
           'bg-gray-100 text-gray-800'
@@ -53,7 +53,7 @@ const GameInfo: React.FC<GameInfoProps> = ({ game, currentUser, onForfeit }) => 
           <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
             <div className="flex items-center space-x-2">
               <UserIcon className="w-5 h-5 text-blue-600" />
-              <span className="font-medium">{player1.username}</span>
+              <span className="font-medium">{typeof player1 === 'string' ? 'Player 1' : player1.username}</span>
               <span className="text-sm text-gray-600">(X)</span>
             </div>
             {game.currentPlayer === 'X' && (
@@ -68,7 +68,7 @@ const GameInfo: React.FC<GameInfoProps> = ({ game, currentUser, onForfeit }) => 
           <div className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
             <div className="flex items-center space-x-2">
               <UserIcon className="w-5 h-5 text-red-600" />
-              <span className="font-medium">{player2.username}</span>
+              <span className="font-medium">{typeof player2 === 'string' ? 'Player 2' : player2.username}</span>
               <span className="text-sm text-gray-600">(O)</span>
             </div>
             {game.currentPlayer === 'O' && (
@@ -106,7 +106,7 @@ const GameInfo: React.FC<GameInfoProps> = ({ game, currentUser, onForfeit }) => 
       )}
 
       {/* Action Buttons */}
-      {game.status === 'in_progress' && onForfeit && (
+      {game.status === 'active' && onForfeit && (
         <div className="pt-4 border-t">
           <button
             onClick={onForfeit}

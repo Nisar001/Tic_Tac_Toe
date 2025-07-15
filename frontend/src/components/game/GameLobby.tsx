@@ -129,7 +129,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
           <div className="space-y-3">
             {game.players.player1 && (
               <div
-                key={game.players.player1.id}
+                key={typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
               >
                 <div className="flex items-center gap-3">
@@ -138,13 +138,13 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   </div>
                   <div>
                     <div className="font-medium text-gray-900 flex items-center gap-2">
-                      {game.players.player1.username}
-                      {isHost && game.players.player1.id === currentUser.id && (
+                      {typeof game.players.player1 === 'string' ? 'Player 1' : game.players.player1.username}
+                      {isHost && (typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id) === currentUser.id && (
                         <span title="Host">
                           <Crown className="w-4 h-4 text-yellow-500" />
                         </span>
                       )}
-                      {game.players.player1.id === currentUser.id && (
+                      {(typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id) === currentUser.id && (
                         <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                           You
                         </span>
@@ -156,9 +156,12 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   </div>
                 </div>
 
-                {isHost && game.players.player1.id !== currentUser.id && onKickPlayer && (
+                {isHost && (typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id) !== currentUser.id && onKickPlayer && (
                   <button
-                    onClick={() => onKickPlayer(game.players.player1.id)}
+                    onClick={() => {
+                      const playerId = typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id;
+                      if (playerId) onKickPlayer(playerId);
+                    }}
                     className="p-1 text-red-600 hover:bg-red-50 rounded"
                     title="Kick player"
                   >
@@ -170,7 +173,7 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
             {game.players.player2 ? (
               <div
-                key={game.players.player2.id}
+                key={typeof game.players.player2 === 'string' ? game.players.player2 : game.players.player2.id}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
               >
                 <div className="flex items-center gap-3">
@@ -179,8 +182,8 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   </div>
                   <div>
                     <div className="font-medium text-gray-900 flex items-center gap-2">
-                      {game.players.player2.username}
-                      {game.players.player2.id === currentUser.id && (
+                      {typeof game.players.player2 === 'string' ? 'Player 2' : game.players.player2.username}
+                      {(typeof game.players.player2 === 'string' ? game.players.player2 : game.players.player2.id) === currentUser.id && (
                         <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                           You
                         </span>
@@ -194,7 +197,10 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 
                 {isHost && onKickPlayer && (
                   <button
-                    onClick={() => onKickPlayer(game.players.player2!.id)}
+                    onClick={() => {
+                      const playerId = typeof game.players.player2 === 'string' ? game.players.player2 : game.players.player2?.id;
+                      if (playerId) onKickPlayer(playerId);
+                    }}
                     className="p-1 text-red-600 hover:bg-red-50 rounded"
                     title="Kick player"
                   >

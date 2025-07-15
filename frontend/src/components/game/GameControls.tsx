@@ -23,8 +23,10 @@ export const GameControls: React.FC<GameControlsProps> = ({
   isChatOpen = false,
   spectatorCount = 0
 }) => {
-  const isPlayerInGame = game.players.player1?.id === currentUserId || game.players.player2?.id === currentUserId;
-  const canForfeit = game.status === 'in_progress' && isPlayerInGame;
+  const player1Id = typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1?.id;
+  const player2Id = typeof game.players.player2 === 'string' ? game.players.player2 : game.players.player2?.id;
+  const isPlayerInGame = player1Id === currentUserId || player2Id === currentUserId;
+  const canForfeit = game.status === 'active' && isPlayerInGame;
   const canRequestRematch = game.status === 'completed' && isPlayerInGame;
   const showSpectatorControls = game.gameType === 'custom' && isPlayerInGame;
 

@@ -28,14 +28,14 @@ export const socialConfig = {
 
   redirectUrIs: {
     google: {
-      callback: `${currentBaseUrl}/api/auth/google/callback`,
-      success: `${currentFrontendUrl}/auth/success`,
-      error: `${currentFrontendUrl}/auth/error`
+      callback: `${currentBaseUrl}/api/auth/social/google/callback`,
+      success: `${currentFrontendUrl}/auth/callback`,
+      error: `${currentFrontendUrl}/auth/login`
     },
     facebook: {
-      callback: `${currentBaseUrl}/api/auth/facebook/callback`,
-      success: `${currentFrontendUrl}/auth/success`,
-      error: `${currentFrontendUrl}/auth/error`
+      callback: `${currentBaseUrl}/api/auth/social/facebook/callback`,
+      success: `${currentFrontendUrl}/auth/callback`,
+      error: `${currentFrontendUrl}/auth/login`
     }
   },
 
@@ -57,26 +57,22 @@ export const socialConfig = {
 export const socialProviderRedirectURIs = {
   development: {
     google: [
-      'http://localhost:3000/api/auth/google/callback',
-      'http://localhost:3001/auth/success',
-      'http://localhost:3001/auth/error'
+      'http://localhost:5000/api/auth/social/google/callback',
+      'http://localhost:3000/auth/callback'
     ],
     facebook: [
-      'http://localhost:3000/api/auth/facebook/callback',
-      'http://localhost:3001/auth/success',
-      'http://localhost:3001/auth/error'
+      'http://localhost:5000/api/auth/social/facebook/callback',
+      'http://localhost:3000/auth/callback'
     ]
   },
   production: {
     google: [
-      `${baseUrls.production}/api/auth/google/callback`,
-      `${frontendUrls.production}/auth/success`,
-      `${frontendUrls.production}/auth/error`
+      `${baseUrls.production}/api/auth/social/google/callback`,
+      `${frontendUrls.production}/auth/callback`
     ],
     facebook: [
-      `${baseUrls.production}/api/auth/facebook/callback`,
-      `${frontendUrls.production}/auth/success`,
-      `${frontendUrls.production}/auth/error`
+      `${baseUrls.production}/api/auth/social/facebook/callback`,
+      `${frontendUrls.production}/auth/callback`
     ]
   }
 };

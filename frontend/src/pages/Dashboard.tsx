@@ -29,7 +29,7 @@ const Dashboard: React.FC = () => {
       // Load games and stats separately to avoid one failure breaking the other
       const gamesPromise = getActiveGames().catch(error => {
         console.error('Failed to load active games:', error);
-        return [];
+        return { games: [], totalActiveGames: 0 };
       });
       
       const statsPromise = getUserStats().catch(error => {
@@ -37,9 +37,10 @@ const Dashboard: React.FC = () => {
         return null;
       });
 
-      const [games, stats] = await Promise.all([gamesPromise, statsPromise]);
+      const [gamesResponse, stats] = await Promise.all([gamesPromise, statsPromise]);
       
-      // Ensure activeGames is always an array
+      // Handle new API response format
+      const games = gamesResponse?.games || gamesResponse || [];
       setActiveGames(Array.isArray(games) ? games : []);
       setUserStats(stats);
     } catch (error) {
@@ -223,7 +224,7 @@ const Dashboard: React.FC = () => {
                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                     game.status === 'waiting' 
                       ? 'bg-yellow-100 text-yellow-800'
-                      : game.status === 'in_progress'
+                      : game.status === 'active'
                       ? 'bg-green-100 text-green-800'
                       : 'bg-gray-100 text-gray-800'
                   }`}>

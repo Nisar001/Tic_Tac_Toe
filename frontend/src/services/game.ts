@@ -22,7 +22,7 @@ export const gameAPI = {
     apiClient.get<Game>(`/game/state/${roomId}`),
 
   getActiveGames: () => 
-    apiClient.get<Game[]>('/game/active'),
+    apiClient.get<{ games: Game[]; totalActiveGames: number }>('/game/active'),
 
   makeMove: (roomId: string, data: MakeMoveRequest) => 
     apiClient.post<Game>(`/game/move/${roomId}`, data),
@@ -35,6 +35,9 @@ export const gameAPI = {
 
   getLeaderboard: (page: number = 1, limit: number = 10) => 
     apiClient.get<LeaderboardResponse>(`/game/leaderboard?page=${page}&limit=${limit}`),
+
+  getGameHistory: (page: number = 1, limit: number = 10) =>
+    apiClient.get<{ games: Game[]; pagination: any }>(`/game/history?page=${page}&limit=${limit}`),
 
   // Matchmaking
   joinMatchmakingQueue: (data: MatchmakingRequest) => 
@@ -51,10 +54,10 @@ export const gameAPI = {
 
   // Admin only
   forceMatch: (player1Id: string, player2Id: string) => 
-    apiClient.post('/game/matchmaking/force-match', { player1Id, player2Id }),
+    apiClient.post('/game/admin/force-match', { player1Id, player2Id }),
 
   cleanupQueue: () => 
-    apiClient.post('/game/matchmaking/cleanup'),
+    apiClient.post('/game/admin/cleanup-queue'),
 };
 
 export default gameAPI;

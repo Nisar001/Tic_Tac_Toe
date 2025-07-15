@@ -17,7 +17,7 @@ export const GameManagement: React.FC<GameManagementProps> = ({
   onDeleteGame,
   isLoading = false
 }) => {
-  const [filterStatus, setFilterStatus] = useState<'all' | 'waiting' | 'in_progress' | 'completed'>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'waiting' | 'active' | 'completed'>('all');
   const [filterType, setFilterType] = useState<'all' | 'quick' | 'ranked' | 'custom' | 'tournament'>('all');
   const [showActions, setShowActions] = useState<string | null>(null);
 
@@ -37,7 +37,7 @@ export const GameManagement: React.FC<GameManagementProps> = ({
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       waiting: { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Waiting' },
-      in_progress: { bg: 'bg-green-100', text: 'text-green-800', label: 'In Progress' },
+      active: { bg: 'bg-green-100', text: 'text-green-800', label: 'Active' },
       completed: { bg: 'bg-gray-100', text: 'text-gray-800', label: 'Completed' },
       abandoned: { bg: 'bg-red-100', text: 'text-red-800', label: 'Abandoned' }
     };
@@ -85,7 +85,7 @@ export const GameManagement: React.FC<GameManagementProps> = ({
               >
                 <option value="all">All Status</option>
                 <option value="waiting">Waiting</option>
-                <option value="in_progress">In Progress</option>
+                <option value="active">Active</option>
                 <option value="completed">Completed</option>
               </select>
               <select
@@ -109,7 +109,7 @@ export const GameManagement: React.FC<GameManagementProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">
-              {games.filter(g => g.status === 'in_progress').length}
+              {games.filter(g => g.status === 'active').length}
             </div>
             <div className="text-sm text-gray-600">Active Games</div>
           </div>
@@ -175,7 +175,7 @@ export const GameManagement: React.FC<GameManagementProps> = ({
                   <td className="px-6 py-4">
                     <div>
                       <div className="text-sm font-medium text-gray-900">
-                        #{game.id.slice(0, 8)}
+                        #{game.id?.slice(0, 8) || 'N/A'}
                       </div>
                       <div className="text-sm text-gray-500">
                         Room: {game.roomId?.slice(0, 8) || game.room?.slice(0, 8) || 'N/A'}
@@ -193,7 +193,10 @@ export const GameManagement: React.FC<GameManagementProps> = ({
                       </div>
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
-                      {[game.players.player1?.username, game.players.player2?.username].filter(Boolean).join(' vs ')}
+                      {[
+                        typeof game.players.player1 === 'string' ? 'Player 1' : game.players.player1?.username,
+                        typeof game.players.player2 === 'string' ? 'Player 2' : game.players.player2?.username
+                      ].filter(Boolean).join(' vs ')}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -202,7 +205,18 @@ export const GameManagement: React.FC<GameManagementProps> = ({
                       <div className="flex items-center gap-1 mt-1">
                         <Trophy className="w-3 h-3 text-yellow-500" />
                         <span className="text-xs text-gray-600">
-                          {game.players.player1?.id === game.winner ? game.players.player1?.username : game.players.player2?.username} won
+                          {(() => {
+                            const player1 = game.players.player1;
+                            const player2 = game.players.player2;
+                            const player1Id = typeof player1 === 'string' ? player1 : player1?.id;
+                            const player2Id = typeof player2 === 'string' ? player2 : player2?.id;
+                            const player1Name = typeof player1 === 'string' ? 'Player 1' : player1?.username;
+                            const player2Name = typeof player2 === 'string' ? 'Player 2' : player2?.username;
+                            
+                            if (player1Id === game.winner) return player1Name;
+                            if (player2Id === game.winner) return player2Name;
+                            return 'Unknown';
+                          })()} won
                         </span>
                       </div>
                     )}
@@ -219,18 +233,18 @@ export const GameManagement: React.FC<GameManagementProps> = ({
                   <td className="px-6 py-4">
                     <div className="relative">
                       <button
-                        onClick={() => setShowActions(showActions === game.id ? null : game.id)}
+                        onClick={() => setShowActions(showActions === game.id ? null : game.id || null)}
                         className="p-1 rounded-full hover:bg-gray-100"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-500" />
                       </button>
                       
-                      {showActions === game.id && (
+                      {showActions === game.id && game.id && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
                           <div className="py-1">
                             <button
                               onClick={() => {
-                                onViewGame(game.id);
+                                if (game.id) onViewGame(game.id);
                                 setShowActions(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
@@ -238,10 +252,10 @@ export const GameManagement: React.FC<GameManagementProps> = ({
                               <Eye className="w-4 h-4" />
                               View Game
                             </button>
-                            {game.status === 'in_progress' && (
+                            {game.status === 'active' && (
                               <button
                                 onClick={() => {
-                                  onEndGame(game.id);
+                                  if (game.id) onEndGame(game.id);
                                   setShowActions(null);
                                 }}
                                 className="flex items-center gap-2 w-full px-4 py-2 text-sm text-orange-700 hover:bg-orange-50"
@@ -252,7 +266,7 @@ export const GameManagement: React.FC<GameManagementProps> = ({
                             )}
                             <button
                               onClick={() => {
-                                onDeleteGame(game.id);
+                                if (game.id) onDeleteGame(game.id);
                                 setShowActions(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"

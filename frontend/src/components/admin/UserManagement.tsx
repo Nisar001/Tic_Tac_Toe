@@ -49,7 +49,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     setSelectedUsers(
       selectedUsers.length === sortedUsers.length
         ? []
-        : sortedUsers.map(user => user.id)
+        : sortedUsers.map(user => user.id || user._id).filter((id): id is string => Boolean(id))
     );
   };
 
@@ -170,8 +170,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   <td className="px-6 py-4">
                     <input
                       type="checkbox"
-                      checked={selectedUsers.includes(user.id)}
-                      onChange={() => handleSelectUser(user.id)}
+                      checked={selectedUsers.includes(user.id || user._id)}
+                      onChange={() => handleSelectUser(user.id || user._id)}
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
                   </td>
@@ -205,13 +205,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                   <td className="px-6 py-4">
                     <div className="relative">
                       <button
-                        onClick={() => setShowActions(showActions === user.id ? null : user.id)}
+                        onClick={() => setShowActions(showActions === (user.id || user._id) ? null : (user.id || user._id))}
                         className="p-1 rounded-full hover:bg-gray-100"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-500" />
                       </button>
                       
-                      {showActions === user.id && (
+                      {showActions === (user.id || user._id) && (
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
                           <div className="py-1">
                             <button
@@ -226,7 +226,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                             </button>
                             <button
                               onClick={() => {
-                                onBlockUser(user.id);
+                                const userId = user.id || user._id;
+                                if (userId) onBlockUser(userId);
                                 setShowActions(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-yellow-700 hover:bg-yellow-50"
@@ -236,7 +237,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                             </button>
                             <button
                               onClick={() => {
-                                onDeleteUser(user.id);
+                                const userId = user.id || user._id;
+                                if (userId) onDeleteUser(userId);
                                 setShowActions(null);
                               }}
                               className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"

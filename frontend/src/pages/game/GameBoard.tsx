@@ -10,7 +10,7 @@ const GameBoard: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { currentGame, makeMove, getGameState, isLoading } = useGame();
-  const [board, setBoard] = useState<string[][]>(Array(3).fill(null).map(() => Array(3).fill('')));
+  const [board, setBoard] = useState<(string | null)[][]>(Array(3).fill(null).map(() => Array(3).fill(null)));
   const [isMyTurn, setIsMyTurn] = useState(false);
 
   useEffect(() => {
@@ -21,8 +21,20 @@ const GameBoard: React.FC = () => {
 
   useEffect(() => {
     if (currentGame) {
-      setBoard(currentGame.board || Array(3).fill(null).map(() => Array(3).fill('')));
-      setIsMyTurn(currentGame.currentPlayer === user?.id);
+      setBoard(currentGame.board || Array(3).fill(null).map(() => Array(3).fill(null)));
+      
+      // Determine if it's the current user's turn
+      const isPlayer1 = typeof currentGame.players.player1 === 'string' 
+        ? currentGame.players.player1 === user?._id 
+        : currentGame.players.player1?.id === user?._id;
+      
+      const isPlayer2 = typeof currentGame.players.player2 === 'string' 
+        ? currentGame.players.player2 === user?._id 
+        : currentGame.players.player2?.id === user?._id;
+      
+      // Player1 is X, Player2 is O
+      const mySymbol = isPlayer1 ? 'X' : (isPlayer2 ? 'O' : null);
+      setIsMyTurn(currentGame.currentPlayer === mySymbol);
     }
   }, [currentGame, user]);
 
@@ -38,7 +50,7 @@ const GameBoard: React.FC = () => {
   };
 
   const handleCellClick = async (row: number, col: number) => {
-    if (!roomId || !isMyTurn || board[row][col] !== '' || currentGame?.status !== 'in_progress') {
+    if (!roomId || !isMyTurn || board[row][col] || currentGame?.status !== 'active') {
       return;
     }
 
@@ -54,15 +66,15 @@ const GameBoard: React.FC = () => {
 
   const renderCell = (row: number, col: number) => {
     const value = board[row][col];
-    const isEmpty = value === '';
-    const isClickable = isEmpty && isMyTurn && currentGame?.status === 'in_progress';
+    const isEmpty = !value;
+    const isClickable = isEmpty && isMyTurn && currentGame?.status === 'active';
 
     return (
       <button
         key={`${row}-${col}`}
         onClick={() => handleCellClick(row, col)}
         disabled={!isClickable}
-        className={`game-cell ${value.toLowerCase()} ${!isClickable ? 'disabled' : ''}`}
+        className={`game-cell ${value ? value.toLowerCase() : ''} ${!isClickable ? 'disabled' : ''}`}
       >
         {value === 'X' && <XMarkIcon className="w-8 h-8" />}
         {value === 'O' && <CircleStackIcon className="w-8 h-8" />}
@@ -103,7 +115,7 @@ const GameBoard: React.FC = () => {
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${
             currentGame.status === 'waiting' 
               ? 'bg-yellow-100 text-yellow-800'
-              : currentGame.status === 'in_progress'
+              : currentGame.status === 'active'
               ? 'bg-green-100 text-green-800'
               : 'bg-gray-100 text-gray-800'
           }`}>
@@ -113,38 +125,41 @@ const GameBoard: React.FC = () => {
 
         {/* Players */}
         <div className="grid grid-cols-2 gap-4 mb-6">
-          {[currentGame.players.player1, currentGame.players.player2].filter(Boolean).map((player, index) => (
-            <div 
-              key={player?.id}
-              className={`p-3 rounded-lg border-2 ${
-                currentGame.currentPlayer === player?.id
-                  ? 'border-primary-300 bg-primary-50'
-                  : 'border-gray-200 bg-gray-50'
-              }`}
-            >
-              <div className="flex items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
-                  player?.symbol === 'X' ? 'bg-primary-100' : 'bg-error-100'
-                }`}>
-                  {player?.symbol === 'X' ? (
-                    <XMarkIcon className={`w-5 h-5 text-primary-600`} />
-                  ) : (
-                    <CircleStackIcon className={`w-5 h-5 text-error-600`} />
-                  )}
-                </div>
-                <div>
-                  <p className="font-medium text-gray-900">{player?.username}</p>
-                  <p className="text-xs text-gray-500">
-                    {player?.isConnected ? 'Online' : 'Offline'}
-                  </p>
+          {[currentGame.players.player1, currentGame.players.player2].filter(Boolean).map((player, index) => {
+            const playerObj = typeof player === 'string' ? { id: player, username: 'Player', symbol: index === 0 ? 'X' : 'O', isConnected: true } : player;
+            return (
+              <div 
+                key={playerObj?.id || index}
+                className={`p-3 rounded-lg border-2 ${
+                  currentGame.currentPlayer === playerObj?.symbol
+                    ? 'border-primary-300 bg-primary-50'
+                    : 'border-gray-200 bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 ${
+                    playerObj?.symbol === 'X' ? 'bg-primary-100' : 'bg-error-100'
+                  }`}>
+                    {playerObj?.symbol === 'X' ? (
+                      <XMarkIcon className={`w-5 h-5 text-primary-600`} />
+                    ) : (
+                      <CircleStackIcon className={`w-5 h-5 text-error-600`} />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{playerObj?.username}</p>
+                    <p className="text-xs text-gray-500">
+                      {playerObj?.isConnected ? 'Online' : 'Offline'}
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Turn indicator */}
-        {currentGame.status === 'in_progress' && (
+        {currentGame.status === 'active' && (
           <div className="text-center mb-4">
             <p className="text-lg font-medium text-gray-900">
               {isMyTurn ? "It's your turn!" : "Waiting for opponent..."}
@@ -189,7 +204,7 @@ const GameBoard: React.FC = () => {
       )}
 
       {/* Game Actions */}
-      {currentGame.status === 'in_progress' && (
+      {currentGame.status === 'active' && (
         <div className="card">
           <div className="flex justify-center space-x-4">
             <button

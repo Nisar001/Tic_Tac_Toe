@@ -239,13 +239,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   };
 
-  const getActiveGames = async (): Promise<Game[]> => {
+  const getActiveGames = async (): Promise<{ games: Game[]; totalActiveGames: number } | Game[]> => {
     try {
       const response = await gameAPI.getActiveGames();
       
       if (response.data) {
-        dispatch({ type: 'SET_GAMES', payload: response.data });
-        return response.data;
+        // Handle new API response format
+        const games = response.data.games || response.data;
+        dispatch({ type: 'SET_GAMES', payload: games });
+        return response.data; // Return the full response for backward compatibility
       }
       return [];
     } catch (error: any) {

@@ -16,6 +16,7 @@ import Register from './pages/auth/Register';
 import ForgotPassword from './pages/auth/ForgotPassword';
 import ResetPassword from './pages/auth/ResetPassword';
 import VerifyEmail from './pages/auth/VerifyEmail';
+import AuthCallback from './pages/auth/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import GameBoard from './pages/game/GameBoard';
 import { Chat } from './pages/chat/Chat';
@@ -68,6 +69,7 @@ function App() {
                 <Route path="/auth/forgot-password" element={<ForgotPassword />} />
                 <Route path="/auth/reset-password" element={<ResetPassword />} />
                 <Route path="/auth/verify-email" element={<VerifyEmail />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
                 
                 {/* Protected routes */}
                 <Route path="/" element={

@@ -49,8 +49,14 @@ export const GameSpectator: React.FC<GameSpectatorProps> = ({
 
   const lastMove = getLastMove();
   const getCurrentPlayerName = () => {
-    if (game.currentPlayer === 'X') return game.players.player1?.username;
-    if (game.currentPlayer === 'O') return game.players.player2?.username;
+    if (game.currentPlayer === 'X') {
+      const player1 = game.players.player1;
+      return typeof player1 === 'string' ? 'Player 1' : player1?.username;
+    }
+    if (game.currentPlayer === 'O') {
+      const player2 = game.players.player2;
+      return typeof player2 === 'string' ? 'Player 2' : player2?.username;
+    }
     return null;
   };
   const currentPlayerName = getCurrentPlayerName();
@@ -120,7 +126,7 @@ export const GameSpectator: React.FC<GameSpectatorProps> = ({
             <div className="lg:col-span-2">
               <div className="bg-white rounded-lg shadow-lg p-6">
                 <div className="text-center mb-6">
-                  {game.status === 'in_progress' && currentPlayerName && (
+                  {game.status === 'active' && currentPlayerName && (
                     <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-800 rounded-full">
                       <div className="w-2 h-2 bg-blue-600 rounded-full animate-pulse"></div>
                       <span className="font-medium">{currentPlayerName}'s turn</span>
@@ -132,9 +138,17 @@ export const GameSpectator: React.FC<GameSpectatorProps> = ({
                       <span className="font-medium">
                         {game.winner 
                           ? `${
-                              game.winner === game.players.player1?.id 
-                                ? game.players.player1?.username 
-                                : game.players.player2?.username
+                              (() => {
+                                const player1 = game.players.player1;
+                                const player2 = game.players.player2;
+                                const player1Id = typeof player1 === 'string' ? player1 : player1?.id;
+                                
+                                if (game.winner === player1Id) {
+                                  return typeof player1 === 'string' ? 'Player 1' : player1?.username;
+                                } else {
+                                  return typeof player2 === 'string' ? 'Player 2' : player2?.username;
+                                }
+                              })()
                             } wins!`
                           : 'Game ended in a draw'
                         }
@@ -146,7 +160,7 @@ export const GameSpectator: React.FC<GameSpectatorProps> = ({
                 {/* Game Board */}
                 <div className="flex justify-center">
                   <TicTacToeBoard
-                    board={game.board}
+                    board={game.board.map(row => row.map(cell => cell || ''))}
                     currentPlayer={game.currentPlayer}
                     onCellClick={() => {}} // Spectators can't interact
                     isMyTurn={false}
@@ -182,13 +196,16 @@ export const GameSpectator: React.FC<GameSpectatorProps> = ({
                     <h4 className="font-semibold text-gray-800 mb-2">Move History</h4>
                     <div className="space-y-1">
                       {game.moves.map((move, index) => {
-                        const player = move.player === game.players.player1?.id 
-                          ? game.players.player1 
+                        const player1 = game.players.player1;
+                        const player1Id = typeof player1 === 'string' ? player1 : player1?.id;
+                        const player = move.player === player1Id 
+                          ? player1 
                           : game.players.player2;
+                        const playerName = typeof player === 'string' ? 'Player' : player?.username;
                         return (
                           <div key={move.id || index} className="flex items-center justify-between text-sm">
                             <span className="text-gray-600">#{index + 1}</span>
-                            <span className="font-medium">{player?.username || 'Unknown'}</span>
+                            <span className="font-medium">{playerName || 'Unknown'}</span>
                             <span className="font-mono">{move.symbol}</span>
                             <span className="text-gray-500">
                               ({move.position.row + 1}, {move.position.col + 1})

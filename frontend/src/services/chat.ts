@@ -8,8 +8,25 @@ import {
 
 export const chatAPI = {
   // Chat room management
-  getChatRooms: () => 
-    apiClient.get<ChatRoom[]>('/chat/rooms'),
+  getChatRooms: (params?: { type?: string; page?: number; limit?: number }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.type) searchParams.append('type', params.type);
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    
+    const queryString = searchParams.toString();
+    return apiClient.get<{ 
+      rooms: ChatRoom[]; 
+      pagination: any; 
+      meta: any; 
+    }>(`/chat/rooms${queryString ? `?${queryString}` : ''}`);
+  },
+
+  createChatRoom: (data: { name: string; description?: string }) =>
+    apiClient.post<ChatRoom>('/chat/rooms', data),
+
+  deleteChatRoom: (roomId: string) =>
+    apiClient.delete(`/chat/rooms/${roomId}`),
 
   joinChatRoom: (roomId: string) => 
     apiClient.post(`/chat/rooms/${roomId}/join`),
@@ -22,17 +39,17 @@ export const chatAPI = {
 
   // Message management
   getChatHistory: (roomId: string, page: number = 1, limit: number = 50) => 
-    apiClient.get<ChatMessage[]>(`/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`),
+    apiClient.get<{ messages: ChatMessage[]; pagination: any }>(`/chat/rooms/${roomId}/messages?page=${page}&limit=${limit}`),
 
   sendMessage: (roomId: string, data: SendMessageRequest) => 
     apiClient.post<ChatMessage>(`/chat/rooms/${roomId}/messages`, data),
 
   // Backward compatibility
   getGameChatHistory: (gameId: string, page: number = 1, limit: number = 50) => 
-    apiClient.get<ChatMessage[]>(`/chat/history/${gameId}?page=${page}&limit=${limit}`),
+    apiClient.get<{ messages: ChatMessage[]; pagination: any }>(`/chat/history/${gameId}?page=${page}&limit=${limit}`),
 
-  sendGameMessage: (gameId: string, data: SendMessageRequest) => 
-    apiClient.post<ChatMessage>(`/chat/send`, { ...data, gameId }),
+  sendGameMessage: (data: SendMessageRequest & { roomId?: string; gameId?: string }) => 
+    apiClient.post<ChatMessage>('/chat/send', data),
 };
 
 export default chatAPI;

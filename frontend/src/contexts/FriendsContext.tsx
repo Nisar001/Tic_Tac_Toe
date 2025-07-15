@@ -169,7 +169,7 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
       if (response.data) {
         // Transform User[] to Friend[] 
         const friends: Friend[] = response.data.map(user => ({
-          id: user.id,
+          id: user.id || user._id,
           user: user,
           friendSince: user.createdAt || new Date().toISOString(),
           status: 'offline' as const,

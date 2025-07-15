@@ -110,11 +110,11 @@ const GameHistory: React.FC = () => {
                   <div className="mt-2 flex items-center space-x-2">
                     <span className="text-xs text-gray-500">Players:</span>
                     <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                      {game.players.player1?.username} (X)
+                      {typeof game.players.player1 === 'string' ? 'Player 1' : game.players.player1?.username || 'Player 1'} (X)
                     </span>
                     {game.players.player2 && (
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                        {game.players.player2.username} (O)
+                        {typeof game.players.player2 === 'string' ? 'Player 2' : game.players.player2?.username || 'Player 2'} (O)
                       </span>
                     )}
                   </div>
