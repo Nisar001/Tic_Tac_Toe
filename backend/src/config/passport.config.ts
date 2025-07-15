@@ -78,10 +78,14 @@ const findOrCreateUser = async (profile: any, provider: string): Promise<IUser> 
 // ✅ Google Strategy
 //
 if (socialConfig.providers.google.clientId && socialConfig.providers.google.clientSecret) {
+  const googleCallbackURL = process.env.NODE_ENV === 'production' 
+    ? 'https://tic-tac-toe-uf5h.onrender.com/api/auth/social/google/callback'
+    : socialConfig.redirectUrIs.google.callback;
+    
   passport.use(new GoogleStrategy({
     clientID: socialConfig.providers.google.clientId,
     clientSecret: socialConfig.providers.google.clientSecret,
-    callbackURL: socialConfig.redirectUrIs.google.callback,
+    callbackURL: googleCallbackURL,
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const user = await findOrCreateUser(profile, 'google');
@@ -99,10 +103,14 @@ if (socialConfig.providers.google.clientId && socialConfig.providers.google.clie
 // ✅ Facebook Strategy
 //
 if (socialConfig.providers.facebook.appId && socialConfig.providers.facebook.appSecret) {
+  const facebookCallbackURL = process.env.NODE_ENV === 'production' 
+    ? 'https://tic-tac-toe-uf5h.onrender.com/api/auth/social/facebook/callback'
+    : socialConfig.redirectUrIs.facebook.callback;
+    
   passport.use(new FacebookStrategy({
     clientID: socialConfig.providers.facebook.appId,
     clientSecret: socialConfig.providers.facebook.appSecret,
-    callbackURL: socialConfig.redirectUrIs.facebook.callback,
+    callbackURL: facebookCallbackURL,
     profileFields: ['id', 'emails', 'name', 'photos'],
   }, async (accessToken, refreshToken, profile, done) => {
     try {

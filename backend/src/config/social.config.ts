@@ -2,22 +2,28 @@ import { config } from './index';
 
 // Base URLs for backend
 const baseUrls = {
-  development: 'http://localhost:3000',
-  production: process.env.BASE_URL || 'https://your-api-domain.com',
-  test: process.env.BASE_URL_TEST || 'http://localhost:3000'
+  development: 'http://localhost:5000',
+  production: process.env.BASE_URL || 'https://tic-tac-toe-uf5h.onrender.com',
+  test: process.env.BASE_URL_TEST || 'http://localhost:5000'
 };
 
 // Frontend URLs
 const frontendUrls = {
-  development: 'http://localhost:3001',
+  development: 'http://localhost:3000',
   production: process.env.FRONTEND_URL || 'https://your-frontend-domain.com',
-  test: process.env.FRONTEND_URL_TEST || 'http://localhost:3001'
+  test: process.env.FRONTEND_URL_TEST || 'http://localhost:3000'
 };
 
 const currentEnv = config.NODE_ENV || 'development';
 
-const currentBaseUrl = baseUrls[currentEnv as keyof typeof baseUrls];
-const currentFrontendUrl = frontendUrls[currentEnv as keyof typeof frontendUrls];
+// Force production URLs for deployed backend
+const currentBaseUrl = process.env.NODE_ENV === 'production' 
+  ? 'https://tic-tac-toe-uf5h.onrender.com' 
+  : baseUrls[currentEnv as keyof typeof baseUrls];
+  
+const currentFrontendUrl = process.env.NODE_ENV === 'production'
+  ? process.env.FRONTEND_URL || 'http://localhost:3000'
+  : frontendUrls[currentEnv as keyof typeof frontendUrls];
 
 // Social auth configuration
 export const socialConfig = {
@@ -67,12 +73,12 @@ export const socialProviderRedirectURIs = {
   },
   production: {
     google: [
-      `${baseUrls.production}/api/auth/social/google/callback`,
-      `${frontendUrls.production}/auth/callback`
+      'https://tic-tac-toe-uf5h.onrender.com/api/auth/social/google/callback',
+      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`
     ],
     facebook: [
-      `${baseUrls.production}/api/auth/social/facebook/callback`,
-      `${frontendUrls.production}/auth/callback`
+      'https://tic-tac-toe-uf5h.onrender.com/api/auth/social/facebook/callback',
+      `${process.env.FRONTEND_URL || 'http://localhost:3000'}/auth/callback`
     ]
   }
 };

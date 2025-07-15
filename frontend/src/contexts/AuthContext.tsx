@@ -121,7 +121,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
+      console.log('AuthContext: Attempting login...');
       const response = await authAPI.login(credentials);
+      console.log('AuthContext: Login response:', response);
       
       if (response.data) {
         const { user, token, refreshToken } = response.data;
@@ -143,11 +145,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         dispatch({ type: 'SET_USER', payload: user });
         dispatch({ type: 'SET_TOKENS', payload: tokens });
         
+        console.log('AuthContext: Login successful, user:', user);
         toast.success('Successfully logged in!');
+      } else {
+        throw new Error('Invalid response format');
       }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Login failed';
+      console.error('AuthContext: Login error:', error);
+      
+      const message = error.response?.data?.message || error.message || 'Login failed';
       toast.error(message);
+      
+      // Re-throw the error so the component can handle it too
       throw error;
     } finally {
       dispatch({ type: 'SET_LOADING', payload: false });
@@ -158,12 +167,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await authAPI.register(credentials);
+      // Send all credentials including confirmPassword (backend validation expects it)
+      const registerData = {
+        username: credentials.username,
+        email: credentials.email,
+        password: credentials.password,
+        confirmPassword: credentials.confirmPassword,
+      };
+      
+      console.log('Sending registration data:', registerData);
+      const response = await authAPI.register(registerData);
+      console.log('Registration response:', response);
       
       if (response.data) {
         toast.success('Account created successfully! Please check your email for verification.');
       }
     } catch (error: any) {
+      console.error('Registration error:', error);
+      console.error('Error response:', error.response?.data);
       const message = error.response?.data?.message || 'Registration failed';
       toast.error(message);
       throw error;
@@ -212,6 +233,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const refreshUser = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      if (response.data) {
+        const updatedUser = response.data;
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
+        dispatch({ type: 'SET_USER', payload: updatedUser });
+      }
+    } catch (error) {
+      console.error('Failed to refresh user data:', error);
+      throw error;
+    }
+  };
+
   const updateProfile = async (data: UpdateProfileData) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
@@ -251,11 +286,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const verifyEmail = async (email: string, code: string) => {
+  const verifyEmail = async (email: string, verificationCode: string) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await authAPI.verifyEmail({ email, code });
+      const response = await authAPI.verifyEmail({ email, verificationCode });
       
       if (response.data) {
         if (state.user) {
@@ -333,6 +368,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     refreshToken,
+    refreshUser,
     updateProfile,
     changePassword,
     verifyEmail,

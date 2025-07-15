@@ -7,14 +7,20 @@ import { useAuth } from '../../contexts/AuthContext';
 import { RegisterCredentials } from '../../types';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 import { EyeIcon, EyeSlashIcon, UserIcon, LockClosedIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
-import { FaGoogle, FaFacebook, FaTwitter, FaInstagram } from 'react-icons/fa';
+import { FaGoogle, FaFacebook } from 'react-icons/fa';
 import { API_BASE_URL } from '../../constants';
+
+// Extended registration form data with terms acceptance
+interface RegisterFormData extends RegisterCredentials {
+  acceptTerms: boolean;
+}
 
 const schema = yup.object({
   username: yup
     .string()
     .min(3, 'Username must be at least 3 characters')
     .max(20, 'Username must be less than 20 characters')
+    .matches(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores')
     .required('Username is required'),
   email: yup
     .string()
@@ -23,11 +29,16 @@ const schema = yup.object({
   password: yup
     .string()
     .min(6, 'Password must be at least 6 characters')
+    .matches(/^(?=.*[A-Za-z])(?=.*\d)/, 'Password must contain at least one letter and one number')
     .required('Password is required'),
   confirmPassword: yup
     .string()
     .oneOf([yup.ref('password')], 'Passwords must match')
     .required('Please confirm your password'),
+  acceptTerms: yup
+    .boolean()
+    .oneOf([true], 'You must accept the terms and conditions')
+    .required('You must accept the terms and conditions'),
 });
 
 const Register: React.FC = () => {
@@ -39,21 +50,43 @@ const Register: React.FC = () => {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
-  } = useForm<RegisterCredentials>({
+  } = useForm<RegisterFormData>({
     resolver: yupResolver(schema),
   });
 
-  const onSubmit = async (data: RegisterCredentials) => {
+  const password = watch('password', '');
+
+  // Password strength validation
+  const passwordChecks = {
+    length: password.length >= 6,
+    hasLetter: /[A-Za-z]/.test(password),
+    hasNumber: /\d/.test(password),
+  };
+
+  const onSubmit = async (data: RegisterFormData) => {
     try {
-      await registerUser(data);
-      navigate('/auth/login');
+      console.log('Form data received:', data);
+      // Extract only the registration credentials (exclude acceptTerms)
+      const { acceptTerms, ...credentials } = data;
+      console.log('Credentials to send:', credentials);
+      
+      await registerUser(credentials);
+      // Navigate to email verification page with the email as state
+      navigate('/auth/verify-email', { 
+        state: { 
+          email: data.email,
+          message: 'Account created successfully! Please check your email for verification.' 
+        } 
+      });
     } catch (error) {
+      console.error('Form submission error:', error);
       // Error is handled by the auth context
     }
   };
 
-  const handleSocialSignup = (provider: 'google' | 'facebook' | 'twitter' | 'instagram') => {
+  const handleSocialSignup = (provider: 'google' | 'facebook') => {
     window.location.href = `${API_BASE_URL}/auth/social/${provider}`;
   };
 
@@ -63,35 +96,32 @@ const Register: React.FC = () => {
         <h2 className="text-2xl font-bold mb-6 gradient-text text-center">
           Create Account
         </h2>
-        <div className="flex justify-center gap-4 mb-4">
+        <div className="flex justify-center gap-4 mb-6">
           <button
             type="button"
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 px-6 py-2 text-sm"
             onClick={() => handleSocialSignup('google')}
           >
-            <FaGoogle className="text-lg" /> Google
+            <FaGoogle className="text-lg" />
+            Sign up with Google
           </button>
           <button
             type="button"
-            className="btn-secondary flex items-center gap-2"
+            className="btn-secondary flex items-center gap-2 px-6 py-2 text-sm"
             onClick={() => handleSocialSignup('facebook')}
           >
-            <FaFacebook className="text-lg" /> Facebook
+            <FaFacebook className="text-lg" />
+            Sign up with Facebook
           </button>
-          <button
-            type="button"
-            className="btn-secondary flex items-center gap-2"
-            onClick={() => handleSocialSignup('twitter')}
-          >
-            <FaTwitter className="text-lg" /> Twitter
-          </button>
-          <button
-            type="button"
-            className="btn-secondary flex items-center gap-2"
-            onClick={() => handleSocialSignup('instagram')}
-          >
-            <FaInstagram className="text-lg" /> Instagram
-          </button>
+        </div>
+
+        <div className="relative my-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-300" />
+          </div>
+          <div className="relative flex justify-center text-sm">
+            <span className="bg-white px-2 text-gray-500">Or continue with email</span>
+          </div>
         </div>
 
         {/* Registration Form */}
@@ -168,6 +198,27 @@ const Register: React.FC = () => {
             {errors.password && (
               <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
             )}
+            
+            {/* Password strength indicator */}
+            {password && (
+              <div className="mt-2 space-y-1">
+                <p className="text-xs text-gray-600">Password requirements:</p>
+                <div className="grid grid-cols-2 gap-1 text-xs">
+                  <div className={`flex items-center ${passwordChecks.length ? 'text-green-600' : 'text-gray-400'}`}>
+                    <span className="mr-1">{passwordChecks.length ? '✓' : '○'}</span>
+                    At least 6 characters
+                  </div>
+                  <div className={`flex items-center ${passwordChecks.hasLetter ? 'text-green-600' : 'text-gray-400'}`}>
+                    <span className="mr-1">{passwordChecks.hasLetter ? '✓' : '○'}</span>
+                    At least one letter
+                  </div>
+                  <div className={`flex items-center ${passwordChecks.hasNumber ? 'text-green-600' : 'text-gray-400'}`}>
+                    <span className="mr-1">{passwordChecks.hasNumber ? '✓' : '○'}</span>
+                    At least one number
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -199,6 +250,44 @@ const Register: React.FC = () => {
             </div>
             {errors.confirmPassword && (
               <p className="mt-1 text-sm text-red-600">{errors.confirmPassword.message}</p>
+            )}
+          </div>
+
+          {/* Terms and Conditions */}
+          <div>
+            <div className="flex items-start">
+              <div className="flex items-center h-5">
+                <input
+                  {...register('acceptTerms')}
+                  type="checkbox"
+                  className={`focus:ring-primary-500 h-4 w-4 text-primary-600 border-gray-300 rounded ${errors.acceptTerms ? 'border-red-300' : ''}`}
+                />
+              </div>
+              <div className="ml-3 text-sm">
+                <label className="text-gray-700">
+                  I agree to the{' '}
+                  <Link
+                    to="/terms"
+                    className="font-medium text-primary-600 hover:text-primary-500"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Terms and Conditions
+                  </Link>
+                  {' '}and{' '}
+                  <Link
+                    to="/privacy"
+                    className="font-medium text-primary-600 hover:text-primary-500"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Privacy Policy
+                  </Link>
+                </label>
+              </div>
+            </div>
+            {errors.acceptTerms && (
+              <p className="mt-1 text-sm text-red-600">{errors.acceptTerms.message}</p>
             )}
           </div>
 

@@ -69,10 +69,28 @@ const Login: React.FC = () => {
 
   const onSubmit = async (data: LoginCredentials) => {
     try {
+      console.log('Attempting login with:', { email: data.email, passwordLength: data.password.length });
+      console.log('API_BASE_URL:', API_BASE_URL);
+      
       await login(data);
+      toast.success('Login successful! Redirecting...');
       navigate('/');
-    } catch (error) {
-      // Error is handled by the auth context
+    } catch (error: any) {
+      console.error('Login error:', error);
+      
+      // Enhanced error handling
+      if (error.response?.status === 401) {
+        toast.error('Invalid email or password. Please check your credentials.');
+      } else if (error.response?.status === 429) {
+        toast.error('Too many login attempts. Please try again later.');
+      } else if (error.response?.status >= 500) {
+        toast.error('Server error. Please try again later.');
+      } else if (error.message === 'Network Error') {
+        toast.error('Network error. Please check your internet connection.');
+      } else {
+        const message = error.response?.data?.message || error.message || 'Login failed';
+        toast.error(message);
+      }
     }
   };
 

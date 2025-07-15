@@ -289,7 +289,7 @@ export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
-  confirmPassword?: string;
+  confirmPassword: string;
 }
 
 export interface AuthResponse {
@@ -302,7 +302,7 @@ export interface AuthResponse {
 
 export interface VerifyEmailRequest {
   email: string;
-  code: string;
+  verificationCode: string;
 }
 
 export interface ForgotPasswordRequest {
@@ -459,9 +459,10 @@ export interface AuthContextType {
   register: (credentials: RegisterCredentials) => Promise<void>;
   logout: () => Promise<void>;
   refreshToken: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
   changePassword: (credentials: ChangePasswordCredentials) => Promise<void>;
-  verifyEmail: (email: string, code: string) => Promise<void>;
+  verifyEmail: (email: string, verificationCode: string) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
   requestPasswordReset: (email: string) => Promise<void>;
   resetPassword: (credentials: ResetPasswordCredentials) => Promise<void>;

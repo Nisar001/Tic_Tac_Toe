@@ -26,6 +26,8 @@ import { Admin } from './pages/admin/Admin';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import LoginDebug from './components/LoginDebug';
+import SocialAuthTest from './components/SocialAuthTest';
 
 function App() {
   return (
@@ -70,6 +72,8 @@ function App() {
                 <Route path="/auth/reset-password" element={<ResetPassword />} />
                 <Route path="/auth/verify-email" element={<VerifyEmail />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
+                <Route path="/debug" element={<LoginDebug />} />
+                <Route path="/social-test" element={<SocialAuthTest />} />
                 
                 {/* Protected routes */}
                 <Route path="/" element={
