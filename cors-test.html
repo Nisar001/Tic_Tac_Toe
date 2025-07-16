@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Backend Connectivity Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Backend Connectivity Test</h1>
+    <p>This page tests the connection to your backend API</p>
+    
+    <div id="status" class="status info">Click "Test Connection" to start</div>
+    
+    <button onclick="testHealth()">Test Health Endpoint</button>
+    <button onclick="testCORS()">Test CORS</button>
+    <button onclick="clearResults()">Clear Results</button>
+    
+    <div id="results"></div>
+
+    <script>
+        const BACKEND_URL = 'https://tic-tac-toe-uf5h.onrender.com/api';
+        
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+        
+        function addResult(title, content, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `status ${type}`;
+            resultDiv.innerHTML = `<h3>${title}</h3><pre>${content}</pre>`;
+            resultsDiv.appendChild(resultDiv);
+        }
+        
+        async function testHealth() {
+            updateStatus('Testing health endpoint...', 'info');
+            
+            try {
+                const response = await fetch(`${BACKEND_URL}/health`, {
+                    method: 'GET',
+                    mode: 'cors',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatus('✅ Health check successful!', 'success');
+                    addResult('Health Check Response', JSON.stringify(data, null, 2), 'success');
+                } else {
+                    updateStatus(`❌ Health check failed: ${response.status}`, 'error');
+                    addResult('Health Check Error', `Status: ${response.status}\nStatusText: ${response.statusText}`, 'error');
+                }
+            } catch (error) {
+                updateStatus(`❌ Health check error: ${error.message}`, 'error');
+                addResult('Health Check Error', error.toString(), 'error');
+            }
+        }
+        
+        async function testCORS() {
+            updateStatus('Testing CORS preflight...', 'info');
+            
+            try {
+                // Test OPTIONS request (preflight)
+                const optionsResponse = await fetch(`${BACKEND_URL}/health`, {
+                    method: 'OPTIONS',
+                    mode: 'cors',
+                    credentials: 'include',
+                    headers: {
+                        'Access-Control-Request-Method': 'GET',
+                        'Access-Control-Request-Headers': 'Content-Type'
+                    }
+                });
+                
+                updateStatus('✅ CORS preflight successful!', 'success');
+                addResult('CORS Preflight Response', `Status: ${optionsResponse.status}\nHeaders: ${JSON.stringify([...optionsResponse.headers.entries()], null, 2)}`, 'success');
+                
+            } catch (error) {
+                updateStatus(`❌ CORS preflight error: ${error.message}`, 'error');
+                addResult('CORS Preflight Error', error.toString(), 'error');
+            }
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+            updateStatus('Results cleared', 'info');
+        }
+        
+        // Auto-test on page load
+        window.onload = () => {
+            setTimeout(() => {
+                testHealth();
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

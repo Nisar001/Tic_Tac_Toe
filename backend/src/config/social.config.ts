@@ -93,9 +93,7 @@ export const validateSocialConfig = (): boolean => {
   if (!process.env.FACEBOOK_APP_SECRET) missing.push('FACEBOOK_APP_SECRET');
 
   if (missing.length > 0) {
-    console.warn(
-      `⚠️ Missing social authentication environment variables:\n- ${missing.join('\n- ')}`
-    );
+    // Social auth config missing - disable social features silently in production
     return false;
   }
 

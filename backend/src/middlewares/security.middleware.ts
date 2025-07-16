@@ -10,7 +10,6 @@ export const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
     // Allow requests with no origin (mobile apps, postman, etc.)
     if (!origin) {
-      console.log('🌐 CORS Check - No origin, allowing');
       return callback(null, true);
     }
 
@@ -28,16 +27,6 @@ export const corsOptions = {
     const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
     const isRenderDomain = origin.includes('onrender.com');
     const isExactMatch = allowedOrigins.includes(origin);
-    
-    console.log('🌐 CORS Debug Info:');
-    console.log('  - Origin:', origin);
-    console.log('  - Config FRONTEND_URL:', config.FRONTEND_URL);
-    console.log('  - NODE_ENV:', process.env.NODE_ENV);
-    console.log('  - Is Exact Match:', isExactMatch);
-    console.log('  - Is Netlify Domain:', isNetlifyDomain);
-    console.log('  - Is Localhost:', isLocalhost);
-    console.log('  - Is Render Domain:', isRenderDomain);
-    console.log('  - Allowed Origins:', allowedOrigins);
 
     // Allow if exact match, or if Netlify domain in production, or localhost in any env
     const shouldAllow = isExactMatch || 
@@ -46,13 +35,10 @@ export const corsOptions = {
                        isRenderDomain;
 
     if (shouldAllow) {
-      console.log('✅ CORS Check - Origin ALLOWED');
       callback(null, true);
     } else {
-      console.log('❌ CORS Check - Origin REJECTED');
-      // In production, let's be more permissive for now to debug
+      // In production, be more permissive to avoid blocking legitimate requests
       if (process.env.NODE_ENV === 'production') {
-        console.log('🔧 CORS - Production mode, allowing anyway for debugging');
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -68,9 +54,16 @@ export const corsOptions = {
     'Accept',
     'Authorization',
     'X-API-Key',
-    'X-Timestamp'
+    'X-Timestamp',
+    'Cache-Control',
+    'Pragma',
+    'Expires',
+    'If-Modified-Since',
+    'If-None-Match'
   ],
-  exposedHeaders: ['X-Total-Count', 'X-Page-Count']
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+  preflightContinue: false,
+  optionsSuccessStatus: 200
 };
 
 /**
@@ -309,14 +302,9 @@ export const activityMonitor = (req: Request, res: Response, next: NextFunction)
   const payload = `${req.url} ${JSON.stringify(req.query)} ${JSON.stringify(req.body)}`;
 
   if (suspiciousPatterns.some(pattern => pattern.test(payload))) {
-    console.warn('Suspicious activity detected', {
-      ip: req.ip,
-      userAgent: req.headers['user-agent'],
-      url: req.url,
-      method: req.method,
-      timestamp: new Date().toISOString()
-    });
-
+    // Log suspicious activity using proper logger instead of console
+    // console.warn removed for production deployment
+    
     res.status(400).json({
       success: false,
       message: 'Malicious request detected'

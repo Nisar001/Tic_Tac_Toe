@@ -28,12 +28,10 @@ const Dashboard: React.FC = () => {
     try {
       // Load games and stats separately to avoid one failure breaking the other
       const gamesPromise = getActiveGames().catch(error => {
-        console.error('Failed to load active games:', error);
         return { games: [], totalActiveGames: 0 };
       });
       
       const statsPromise = getUserStats().catch(error => {
-        console.error('Failed to load user stats:', error);
         return null;
       });
 
@@ -44,7 +42,6 @@ const Dashboard: React.FC = () => {
       setActiveGames(Array.isArray(games) ? games : []);
       setUserStats(stats);
     } catch (error) {
-      console.error('Failed to load dashboard data:', error);
       // Set default values on error
       setActiveGames([]);
       setUserStats(null);
@@ -67,7 +64,6 @@ const Dashboard: React.FC = () => {
 
   const handleJoinQueue = () => {
     // TODO: Implement matchmaking
-    console.log('Join matchmaking queue');
   };
 
   if (isLoading) {

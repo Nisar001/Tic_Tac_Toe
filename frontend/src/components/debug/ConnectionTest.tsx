@@ -17,20 +17,16 @@ const ConnectionTest: React.FC<ConnectionTestProps> = ({ onConnectionStatus }) =
     setErrorDetails('');
 
     try {
-      console.log('🔍 Testing connection to:', API_BASE_URL);
-      
       // First test basic connectivity
       const isConnected = await apiClient.testConnection();
       
       if (isConnected) {
         setConnectionStatus('connected');
         onConnectionStatus(true);
-        console.log('✅ Backend connection successful');
       } else {
         throw new Error('Health check failed');
       }
     } catch (error: any) {
-      console.error('❌ Backend connection failed:', error);
       setConnectionStatus('failed');
       setErrorDetails(error.message || 'Unknown error');
       onConnectionStatus(false);

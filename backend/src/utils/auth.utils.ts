@@ -195,41 +195,21 @@ export class AuthUtils {
     try {
       // Validate inputs
       if (!password || !hash) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('❌ Invalid password or hash input');
-        }
         return false;
       }
 
       if (typeof password !== 'string' || typeof hash !== 'string') {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('❌ Password or hash is not a string');
-        }
         return false;
       }
 
       if (hash.length !== 60 || !hash.startsWith('$2')) {
-        if (process.env.NODE_ENV === 'development') {
-          console.log('❌ Invalid bcrypt hash format');
-        }
         return false;
-      }
-
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔑 AuthUtils.comparePassword:');
-        console.log('- Password length:', password.length);
-        console.log('- Hash format valid:', /^\$2[aby]\$\d+\$/.test(hash));
       }
       
       const result = await bcrypt.compare(password, hash);
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('- Bcrypt comparison result:', result);
-      }
-      
       return result;
     } catch (error) {
-      console.error('❌ Password comparison error in AuthUtils:', error);
+      // Use proper logger instead of console.error for production
       return false;
     }
   }
@@ -273,21 +253,14 @@ export class AuthUtils {
   // Utility method to create a fresh password hash for testing/debugging
   static async createFreshPasswordHash(plainPassword: string): Promise<{hash: string, testResult: boolean}> {
     try {
-      console.log('🔧 Creating fresh password hash...');
-      console.log('- Plain password:', plainPassword);
-      
       const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
       const hash = await bcrypt.hash(plainPassword, salt);
       
-      console.log('- Generated hash:', hash);
-      
       // Test the hash immediately
       const testResult = await bcrypt.compare(plainPassword, hash);
-      console.log('- Immediate test result:', testResult);
       
       return { hash, testResult };
     } catch (error) {
-      console.error('❌ Error creating fresh hash:', error);
       throw error;
     }
   }
@@ -295,32 +268,22 @@ export class AuthUtils {
   // TEMPORARY: Emergency password reset method for debugging
   static async emergencyPasswordReset(email: string, newPassword: string): Promise<boolean> {
     try {
-      console.log('🚨 EMERGENCY PASSWORD RESET');
-      console.log('- Email:', email);
-      console.log('- New password:', newPassword);
-
       // Import User model dynamically to avoid circular dependencies
       const User = (await import('../models/user.model')).default;
       
       // Find user
       const user = await User.findOne({ email: email.toLowerCase() });
       if (!user) {
-        console.log('❌ User not found');
         return false;
       }
 
       // Generate new hash
       const salt = await bcrypt.genSalt(this.SALT_ROUNDS);
       const newHash = await bcrypt.hash(newPassword, salt);
-      
-      console.log('- Generated new hash:', newHash);
 
       // Test the new hash
       const testResult = await bcrypt.compare(newPassword, newHash);
-      console.log('- Hash test result:', testResult);
-
       if (!testResult) {
-        console.log('❌ Hash test failed');
         return false;
       }
 
@@ -328,11 +291,9 @@ export class AuthUtils {
       user.password = newHash;
       await user.save();
 
-      console.log('✅ Password updated successfully');
       return true;
 
     } catch (error) {
-      console.error('❌ Emergency password reset failed:', error);
       return false;
     }
   }

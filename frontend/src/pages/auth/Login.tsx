@@ -76,15 +76,10 @@ const Login: React.FC = () => {
     }
 
     try {
-      console.log('Attempting login with:', { email: data.email, passwordLength: data.password.length });
-      console.log('API_BASE_URL:', API_BASE_URL);
-      
       await login(data);
       toast.success('Login successful! Redirecting...');
       navigate('/');
     } catch (error: any) {
-      console.error('Login error:', error);
-      
       // Enhanced error handling
       if (error.response?.status === 401) {
         toast.error('Invalid email or password. Please check your credentials.');
@@ -105,7 +100,6 @@ const Login: React.FC = () => {
     try {
       // Construct the proper social auth URL - Note: /social/ is required
       const socialAuthUrl = `${API_BASE_URL}/auth/social/${provider}`;
-      console.log('Redirecting to:', socialAuthUrl);
       
       // Store the current location for redirect after auth
       localStorage.setItem('auth_redirect_url', window.location.pathname);
@@ -113,7 +107,6 @@ const Login: React.FC = () => {
       // Redirect to the social auth provider
       window.location.href = socialAuthUrl;
     } catch (error) {
-      console.error(`Error initiating ${provider} login:`, error);
       toast.error(`Failed to initiate ${provider} login. Please try again.`);
     }
   };

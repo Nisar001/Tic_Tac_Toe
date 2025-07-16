@@ -6,8 +6,6 @@ class ApiClient {
   private instance: AxiosInstance;
 
   constructor() {
-    console.log('🔗 API Client - Base URL:', API_BASE_URL);
-    
     this.instance = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000, // Increased timeout for slow connections
@@ -21,12 +19,9 @@ class ApiClient {
   }
 
   private setupInterceptors(): void {
-    // Request interceptor to add auth token and debug info
+    // Request interceptor to add auth token
     this.instance.interceptors.request.use(
       (config) => {
-        console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.url}`);
-        console.log('📍 Full URL:', `${config.baseURL}${config.url}`);
-        
         const token = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
@@ -34,7 +29,6 @@ class ApiClient {
         return config;
       },
       (error) => {
-        console.error('❌ Request Error:', error);
         return Promise.reject(error);
       }
     );
@@ -42,24 +36,9 @@ class ApiClient {
     // Response interceptor to handle common errors
     this.instance.interceptors.response.use(
       (response: AxiosResponse) => {
-        console.log(`✅ API Response: ${response.status} ${response.config.url}`);
         return response;
       },
       async (error) => {
-        console.error('❌ API Error Details:');
-        console.error('  - Status:', error.response?.status);
-        console.error('  - Message:', error.message);
-        console.error('  - URL:', error.config?.url);
-        console.error('  - Data:', error.response?.data);
-        
-        // Handle network errors
-        if (!error.response) {
-          console.error('🌐 Network Error - No response received');
-          if (error.code === 'ECONNABORTED') {
-            console.error('⏱️ Request timeout');
-          }
-        }
-        
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -68,7 +47,6 @@ class ApiClient {
           try {
             const refreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
             if (refreshToken) {
-              console.log('🔄 Attempting token refresh...');
               const response = await this.post('/auth/refresh-token', {
                 refreshToken,
               });
@@ -78,7 +56,6 @@ class ApiClient {
 
               // Retry the original request with new token
               originalRequest.headers.Authorization = `Bearer ${accessToken}`;
-              console.log('✅ Token refreshed, retrying request...');
               return this.instance(originalRequest);
             }
           } catch (refreshError) {
@@ -103,19 +80,13 @@ class ApiClient {
   // Connectivity test method
   async testConnection(): Promise<boolean> {
     try {
-      console.log('🔍 Testing API connectivity...');
+      // Use a simple GET request without extra headers that might trigger CORS preflight
       await this.instance.get('/health', { 
-        timeout: 5000,
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
+        timeout: 10000,
       });
-      console.log('✅ API connectivity test passed');
+      
       return true;
     } catch (error: any) {
-      console.error('❌ API connectivity test failed:', error.message);
-      console.error('📋 Full error details:', error);
       return false;
     }
   }

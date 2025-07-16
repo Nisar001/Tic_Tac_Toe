@@ -9,18 +9,32 @@ const router = Router();
 
 // Simple request logging middleware
 const requestLogger = (req: Request, res: Response, next: NextFunction) => {
-  const start = Date.now();
-  
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    logInfo(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms - ${req.ip}`);
-  });
+  // Only log requests in development mode, except for health checks
+  if (process.env.NODE_ENV === 'development' && !req.originalUrl.includes('/health')) {
+    const start = Date.now();
+    
+    res.on('finish', () => {
+      const duration = Date.now() - start;
+      logInfo(`${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms`);
+    });
+  }
   
   next();
 };
 
 // Request logging middleware for API routes
 router.use(requestLogger);
+
+// Handle preflight OPTIONS requests explicitly
+router.options('*', (req: Request, res: Response) => {
+  res.header('Access-Control-Allow-Origin', req.get('Origin') || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,PATCH,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-API-Key, X-Timestamp, Cache-Control, Pragma, Expires, If-Modified-Since, If-None-Match');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Max-Age', '86400'); // 24 hours
+  
+  res.sendStatus(200);
+});
 
 // Health check endpoint for Render
 router.get('/health', (req: Request, res: Response) => {

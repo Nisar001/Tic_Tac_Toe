@@ -69,15 +69,12 @@ const Register: React.FC = () => {
 
   const onSubmit = async (data: RegisterFormData) => {
     if (!isBackendConnected) {
-      console.error('Backend is not reachable. Cannot proceed with registration.');
       return;
     }
 
     try {
-      console.log('Form data received:', data);
       // Extract only the registration credentials (exclude acceptTerms)
       const { acceptTerms, ...credentials } = data;
-      console.log('Credentials to send:', credentials);
       
       await registerUser(credentials);
       // Navigate to email verification page with the email as state
@@ -88,7 +85,6 @@ const Register: React.FC = () => {
         } 
       });
     } catch (error) {
-      console.error('Form submission error:', error);
       // Error is handled by the auth context
     }
   };

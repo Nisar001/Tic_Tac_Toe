@@ -31,13 +31,10 @@ class SocketService {
     if (!this.socket) return;
 
     this.socket.on(SOCKET_EVENTS.CONNECT, () => {
-      console.log('✅ Socket connected');
       this.reconnectAttempts = 0;
     });
 
     this.socket.on(SOCKET_EVENTS.DISCONNECT, (reason: string) => {
-      console.log('❌ Socket disconnected:', reason);
-      
       if (reason === 'io server disconnect') {
         // Server disconnected, need to reconnect manually
         this.handleReconnect();
@@ -45,25 +42,21 @@ class SocketService {
     });
 
     this.socket.on('connect_error', (error: Error) => {
-      console.error('❌ Socket connection error:', error);
       this.handleReconnect();
     });
 
     this.socket.on(SOCKET_EVENTS.ERROR, (error: any) => {
-      console.error('❌ Socket error:', error);
+      // Socket errors handled silently
     });
   }
 
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('❌ Max reconnection attempts reached');
       return;
     }
 
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
-
-    console.log(`🔄 Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts}) in ${delay}ms...`);
 
     setTimeout(() => {
       this.connect();
@@ -80,9 +73,8 @@ class SocketService {
   emit(event: string, data?: any): void {
     if (this.socket?.connected) {
       this.socket.emit(event, data);
-    } else {
-      console.warn('⚠️ Socket not connected. Cannot emit event:', event);
     }
+    // Silently ignore if socket not connected
   }
 
   on(event: string, callback: (...args: any[]) => void): void {
