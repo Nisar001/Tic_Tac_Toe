@@ -70,22 +70,11 @@ const Login: React.FC = () => {
   const onSubmit = async (data: LoginCredentials) => {
     try {
       await login(data);
-      toast.success('Login successful! Redirecting...');
+      // Navigate to dashboard on successful login
       navigate('/');
     } catch (error: any) {
-      // Enhanced error handling
-      if (error.response?.status === 401) {
-        toast.error('Invalid email or password. Please check your credentials.');
-      } else if (error.response?.status === 429) {
-        toast.error('Too many login attempts. Please try again later.');
-      } else if (error.response?.status >= 500) {
-        toast.error('Server error. Please try again later.');
-      } else if (error.message === 'Network Error') {
-        toast.error('Network error. Please check your internet connection.');
-      } else {
-        const message = error.response?.data?.message || error.message || 'Login failed';
-        toast.error(message);
-      }
+      // Error toast is already handled by AuthContext
+      console.error('Login failed:', error);
     }
   };
 

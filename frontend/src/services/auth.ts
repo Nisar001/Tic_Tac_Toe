@@ -4,6 +4,7 @@ import {
   RegisterRequest, 
   User, 
   AuthResponse,
+  ProfileResponse,
   RegisterResponse,
   VerifyEmailRequest,
   ForgotPasswordRequest,
@@ -16,44 +17,44 @@ import {
 export const authAPI = {
   // Public auth endpoints
   register: (data: RegisterRequest) => 
-    apiClient.post<RegisterResponse>('/auth/register', data).then(res => res.data),
+    apiClient.post<RegisterResponse>('/auth/register', data),
 
   login: (data: LoginRequest) => 
-    apiClient.post<AuthResponse>('/auth/login', data).then(res => res.data),
+    apiClient.post<AuthResponse>('/auth/login', data),
 
   verifyEmail: (data: VerifyEmailRequest) => 
-    apiClient.post('/auth/verify-email', data).then(res => res.data),
+    apiClient.post('/auth/verify-email', data),
 
   resendVerification: (email: string) => 
-    apiClient.post('/auth/resend-verification', { email }).then(res => res.data),
+    apiClient.post('/auth/resend-verification', { email }),
 
   requestPasswordReset: (data: ForgotPasswordRequest) => 
-    apiClient.post('/auth/request-password-reset', data).then(res => res.data),
+    apiClient.post('/auth/request-password-reset', data),
 
   resetPassword: (data: ResetPasswordRequest) => 
-    apiClient.post('/auth/reset-password', data).then(res => res.data),
+    apiClient.post('/auth/reset-password', data),
 
   refreshToken: () => 
-    apiClient.post<AuthResponse>('/auth/refresh-token').then(res => res.data),
+    apiClient.post<AuthResponse>('/auth/refresh-token'),
 
   // Protected auth endpoints (require authentication)
   getProfile: () => 
-    apiClient.get<{ data: { user: User } }>('/auth/profile').then(res => res.data?.data?.user),
+    apiClient.get<ProfileResponse>('/auth/profile'),
 
   updateProfile: (data: UpdateProfileRequest) => 
-    apiClient.patch<{ data: { user: User } }>('/auth/profile', data).then(res => res.data?.data?.user),
+    apiClient.patch<ProfileResponse>('/auth/profile', data),
 
   changePassword: (data: ChangePasswordRequest) => 
-    apiClient.post('/auth/change-password', data).then(res => res.data),
+    apiClient.post('/auth/change-password', data),
 
   logout: () => 
-    apiClient.post('/auth/logout').then(res => res.data),
+    apiClient.post('/auth/logout'),
 
   logoutAll: () => 
-    apiClient.post('/auth/logout-all').then(res => res.data),
+    apiClient.post('/auth/logout-all'),
 
   deleteAccount: () => 
-    apiClient.delete('/auth/account').then(res => res.data),
+    apiClient.delete('/auth/account'),
 
   // Social authentication
   googleAuth: () => 

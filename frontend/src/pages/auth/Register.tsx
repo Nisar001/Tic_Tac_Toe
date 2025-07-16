@@ -71,14 +71,11 @@ const Register: React.FC = () => {
       const { acceptTerms, ...credentials } = data;
       
       await registerUser(credentials);
-      // Navigate to email verification page with the email as state
-      navigate('/auth/verify-email', { 
-        state: { 
-          email: data.email,
-          message: 'Account created successfully! Please check your email for verification.' 
-        } 
-      });
+      
+      // Navigate to verify email page with email as URL parameter
+      navigate(`/auth/verify-email?email=${encodeURIComponent(data.email)}`);
     } catch (error) {
+      console.error('Registration failed in component:', error);
       // Error is handled by the auth context
     }
   };

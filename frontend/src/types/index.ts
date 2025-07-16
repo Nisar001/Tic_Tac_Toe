@@ -297,9 +297,23 @@ export interface RegisterRequest {
 export interface AuthResponse {
   success: boolean;
   message: string;
-  user: User;
-  token: string;
-  refreshToken?: string;
+  data: {
+    user: User;
+    tokens: {
+      accessToken: string;
+      refreshToken: string;
+      expiresIn: string;
+      refreshExpiresIn: string;
+    };
+  };
+}
+
+export interface ProfileResponse {
+  success: boolean;
+  message: string;
+  data: {
+    user: User;
+  };
 }
 
 export interface RegisterResponse {
