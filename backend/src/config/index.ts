@@ -101,7 +101,7 @@ export const config = {
       : 'your-session-secret-here'
   ),
 
-  FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  FRONTEND_URL: process.env.FRONTEND_URL || 'https://tictactoenisar.netlify.app',
 
   RATE_LIMIT: {
     WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900'),

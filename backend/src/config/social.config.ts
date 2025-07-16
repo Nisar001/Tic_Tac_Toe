@@ -10,7 +10,7 @@ const baseUrls = {
 // Frontend URLs
 const frontendUrls = {
   development: 'http://localhost:3000',
-  production: process.env.FRONTEND_URL || 'https://your-frontend-domain.com',
+  production: process.env.FRONTEND_URL || 'https://tictactoenisar.netlify.app',
   test: process.env.FRONTEND_URL_TEST || 'http://localhost:3000'
 };
 
@@ -22,7 +22,7 @@ const currentBaseUrl = process.env.NODE_ENV === 'production'
   : baseUrls[currentEnv as keyof typeof baseUrls];
   
 const currentFrontendUrl = process.env.NODE_ENV === 'production'
-  ? process.env.FRONTEND_URL || 'http://localhost:3000'
+  ? process.env.FRONTEND_URL || 'https://tictactoenisar.netlify.app'
   : frontendUrls[currentEnv as keyof typeof frontendUrls];
 
 // Social auth configuration

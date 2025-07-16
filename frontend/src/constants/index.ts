@@ -1,8 +1,6 @@
-import { getFrontendUrl } from '../utils/environment';
-
 // API Configuration
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://tic-tac-toe-uf5h.onrender.com/api';
+export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'https://tic-tac-toe-uf5h.onrender.com';
 
 // App Configuration
 export const APP_NAME = process.env.REACT_APP_APP_NAME || 'Tic Tac Toe';
@@ -10,8 +8,8 @@ export const APP_VERSION = process.env.REACT_APP_APP_VERSION || '1.0.0';
 
 // Social Auth Configuration
 export const SOCIAL_AUTH = {
-  GOOGLE_REDIRECT_URL: process.env.REACT_APP_GOOGLE_REDIRECT_URL || `${getFrontendUrl()}/auth/callback`,
-  FACEBOOK_REDIRECT_URL: process.env.REACT_APP_FACEBOOK_REDIRECT_URL || `${getFrontendUrl()}/auth/callback`,
+  GOOGLE_REDIRECT_URL: process.env.REACT_APP_GOOGLE_REDIRECT_URL || `https://tictactoenisar.netlify.app/auth/callback`,
+  FACEBOOK_REDIRECT_URL: process.env.REACT_APP_FACEBOOK_REDIRECT_URL || `https://tictactoenisar.netlify.app/auth/callback`,
   PROVIDERS: {
     GOOGLE: 'google',
     FACEBOOK: 'facebook',

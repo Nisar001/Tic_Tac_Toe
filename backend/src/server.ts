@@ -53,7 +53,12 @@ const server = http.createServer(app);
 // Initialize Socket.io
 const io = new SocketIOServer(server, {
   cors: {
-    origin: config.FRONTEND_URL,
+    origin: [
+      config.FRONTEND_URL,
+      'https://tictactoenisar.netlify.app',
+      'http://localhost:3000',
+      'http://localhost:5173'
+    ],
     methods: ['GET', 'POST'],
     credentials: true
   },

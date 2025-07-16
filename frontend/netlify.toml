@@ -32,7 +32,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://tic-tac-toe-uf5h.onrender.com wss://tic-tac-toe-uf5h.onrender.com https://*.google.com https://*.facebook.com;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://tic-tac-toe-uf5h.onrender.com wss://tic-tac-toe-uf5h.onrender.com https://*.google.com https://*.facebook.com https://accounts.google.com https://www.facebook.com;"
 
 # Cache static assets for better performance
 [[headers]]

@@ -6,6 +6,7 @@ import * as yup from 'yup';
 import { useAuth } from '../../contexts/AuthContext';
 import { RegisterCredentials } from '../../types';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ConnectionTest from '../../components/debug/ConnectionTest';
 import { EyeIcon, EyeSlashIcon, UserIcon, LockClosedIcon, EnvelopeIcon } from '@heroicons/react/24/outline';
 import { FaGoogle, FaFacebook } from 'react-icons/fa';
 import { API_BASE_URL } from '../../constants';
@@ -46,6 +47,7 @@ const Register: React.FC = () => {
   const { register: registerUser, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
 
   const {
     register,
@@ -66,6 +68,11 @@ const Register: React.FC = () => {
   };
 
   const onSubmit = async (data: RegisterFormData) => {
+    if (!isBackendConnected) {
+      console.error('Backend is not reachable. Cannot proceed with registration.');
+      return;
+    }
+
     try {
       console.log('Form data received:', data);
       // Extract only the registration credentials (exclude acceptTerms)
@@ -114,6 +121,9 @@ const Register: React.FC = () => {
             Sign up with Facebook
           </button>
         </div>
+
+        {/* Connection Test */}
+        <ConnectionTest onConnectionStatus={setIsBackendConnected} />
 
         <div className="relative my-6">
           <div className="absolute inset-0 flex items-center">

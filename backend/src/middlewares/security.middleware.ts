@@ -4,24 +4,59 @@ import { Request, Response, NextFunction } from 'express';
 import { config } from '../config';
 
 /**
- * CORS configuration
+ * CORS configuration with enhanced debugging and flexibility
  */
 export const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin) return callback(null, true);
+    // Allow requests with no origin (mobile apps, postman, etc.)
+    if (!origin) {
+      console.log('🌐 CORS Check - No origin, allowing');
+      return callback(null, true);
+    }
 
     const allowedOrigins = [
       config.FRONTEND_URL,
+      'https://tictactoenisar.netlify.app',
       'http://localhost:3000',
       'http://localhost:5173',
       'http://127.0.0.1:3000',
       'http://127.0.0.1:5173'
     ];
 
-    if (allowedOrigins.includes(origin)) {
+    // Enhanced pattern matching for Netlify
+    const isNetlifyDomain = origin.includes('netlify.app') || origin.includes('netlify.com');
+    const isLocalhost = origin.includes('localhost') || origin.includes('127.0.0.1');
+    const isRenderDomain = origin.includes('onrender.com');
+    const isExactMatch = allowedOrigins.includes(origin);
+    
+    console.log('🌐 CORS Debug Info:');
+    console.log('  - Origin:', origin);
+    console.log('  - Config FRONTEND_URL:', config.FRONTEND_URL);
+    console.log('  - NODE_ENV:', process.env.NODE_ENV);
+    console.log('  - Is Exact Match:', isExactMatch);
+    console.log('  - Is Netlify Domain:', isNetlifyDomain);
+    console.log('  - Is Localhost:', isLocalhost);
+    console.log('  - Is Render Domain:', isRenderDomain);
+    console.log('  - Allowed Origins:', allowedOrigins);
+
+    // Allow if exact match, or if Netlify domain in production, or localhost in any env
+    const shouldAllow = isExactMatch || 
+                       (process.env.NODE_ENV === 'production' && isNetlifyDomain) || 
+                       isLocalhost ||
+                       isRenderDomain;
+
+    if (shouldAllow) {
+      console.log('✅ CORS Check - Origin ALLOWED');
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      console.log('❌ CORS Check - Origin REJECTED');
+      // In production, let's be more permissive for now to debug
+      if (process.env.NODE_ENV === 'production') {
+        console.log('🔧 CORS - Production mode, allowing anyway for debugging');
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
     }
   },
   credentials: true,

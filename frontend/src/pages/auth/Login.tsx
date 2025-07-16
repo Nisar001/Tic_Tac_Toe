@@ -6,6 +6,7 @@ import * as yup from 'yup';
 import { useAuth } from '../../contexts/AuthContext';
 import { LoginCredentials } from '../../types';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
+import ConnectionTest from '../../components/debug/ConnectionTest';
 import { EyeIcon, EyeSlashIcon, UserIcon, LockClosedIcon } from '@heroicons/react/24/outline';
 import { FaGoogle, FaFacebook } from 'react-icons/fa';
 import { API_BASE_URL } from '../../constants';
@@ -27,6 +28,7 @@ const Login: React.FC = () => {
   const { login, isLoading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [searchParams] = useSearchParams();
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
 
   const {
     register,
@@ -68,6 +70,11 @@ const Login: React.FC = () => {
   }, [searchParams]);
 
   const onSubmit = async (data: LoginCredentials) => {
+    if (!isBackendConnected) {
+      toast.error('Cannot login: Backend is not reachable. Please check your connection.');
+      return;
+    }
+
     try {
       console.log('Attempting login with:', { email: data.email, passwordLength: data.password.length });
       console.log('API_BASE_URL:', API_BASE_URL);
@@ -134,6 +141,9 @@ const Login: React.FC = () => {
             <FaFacebook className="text-lg text-blue-600" /> Continue with Facebook
           </button>
         </div>
+
+        {/* Connection Test */}
+        <ConnectionTest onConnectionStatus={setIsBackendConnected} />
 
         {/* Divider */}
         <div className="relative">
