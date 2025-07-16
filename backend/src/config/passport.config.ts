@@ -25,12 +25,29 @@ passport.deserializeUser(async (id: string, done) => {
 const findOrCreateUser = async (profile: any, provider: string): Promise<IUser> => {
   try {
     const email = profile.emails?.[0]?.value || null;
-
-    if (!email) {
-      throw new Error(`No email provided by ${provider}`);
+    
+    // For Facebook, if no email is provided, create a temporary email or handle it differently
+    let userEmail = email;
+    if (!email && provider === 'facebook') {
+      // Create a temporary email using Facebook ID
+      userEmail = `facebook_${profile.id}@temp.tictactoe.app`;
+      logWarn(`No email provided by Facebook for user ${profile.id}, using temporary email`);
     }
 
-    let user = await UserModel.findOne({ email });
+    if (!userEmail) {
+      throw new Error(`No email or identifier provided by ${provider}`);
+    }
+
+    // First try to find user by email
+    let user = await UserModel.findOne({ email: userEmail });
+    
+    // If not found by email, try to find by provider ID
+    if (!user) {
+      user = await UserModel.findOne({ 
+        providerId: profile.id, 
+        provider: provider 
+      });
+    }
 
     if (user) {
       // Update provider info if changed
@@ -38,20 +55,28 @@ const findOrCreateUser = async (profile: any, provider: string): Promise<IUser> 
         user.provider = provider as IUser['provider'];
         user.providerId = profile.id;
         user.avatar = profile.photos?.[0]?.value || user.avatar;
+        
+        // Update email if we now have a real one
+        if (email && user.email !== email) {
+          user.email = email;
+        }
+        
         await user.save();
         logInfo(`Updated existing user provider info for ${provider}`);
       }
     } else {
-      const username = profile.displayName || email.split('@')[0];
+      const username = profile.displayName || 
+                     (profile.name ? `${profile.name.givenName} ${profile.name.familyName}` : '') ||
+                     userEmail.split('@')[0];
       const avatar = profile.photos?.[0]?.value;
 
       user = new UserModel({
-        email,
+        email: userEmail,
         username,
         avatar,
         provider: provider as IUser['provider'],
         providerId: profile.id,
-        isEmailVerified: true,
+        isEmailVerified: email ? true : false, // Only verify if we have a real email
         level: 1,
         xp: 0,
         energy: 5,
@@ -111,7 +136,7 @@ if (socialConfig.providers.facebook.appId && socialConfig.providers.facebook.app
     clientID: socialConfig.providers.facebook.appId,
     clientSecret: socialConfig.providers.facebook.appSecret,
     callbackURL: facebookCallbackURL,
-    profileFields: ['id', 'emails', 'name', 'photos'],
+    profileFields: ['id', 'name', 'photos', 'displayName'], // Removed 'emails' temporarily
   }, async (accessToken, refreshToken, profile, done) => {
     try {
       const user = await findOrCreateUser(profile, 'facebook');
