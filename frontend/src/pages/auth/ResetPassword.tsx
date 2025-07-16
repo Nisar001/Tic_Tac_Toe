@@ -54,11 +54,11 @@ const ResetPassword: React.FC = () => {
       setIsLoading(true);
       const response = await authAPI.resetPassword(data);
       
-      if (response.data.success) {
+      if (response.success) {
         setResetSuccess(true);
         toast.success('Password reset successfully! You can now login with your new password.');
       } else {
-        toast.error(response.data.message || 'Password reset failed');
+        toast.error(response.message || 'Password reset failed');
       }
     } catch (error: any) {
       console.error('Password reset error:', error);

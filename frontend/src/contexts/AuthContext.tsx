@@ -306,7 +306,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const response = await authAPI.verifyEmail({ email, verificationCode });
       
-      if (response.data) {
+      if (response.success) {
         if (state.user) {
           dispatch({
             type: 'UPDATE_USER',

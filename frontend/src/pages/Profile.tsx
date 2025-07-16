@@ -117,7 +117,7 @@ const Profile: React.FC = () => {
       setPasswordLoading(true);
       const response = await authAPI.changePassword(data);
       
-      if (response.data.success) {
+      if (response.success) {
         toast.success('Password updated successfully!');
         resetPassword();
       }

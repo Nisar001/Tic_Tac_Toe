@@ -34,11 +34,11 @@ const ForgotPassword: React.FC = () => {
       setIsLoading(true);
       const response = await authAPI.requestPasswordReset(data);
       
-      if (response.data.success) {
+      if (response.success) {
         setEmailSent(true);
         toast.success('Password reset email sent! Please check your inbox.');
       } else {
-        toast.error(response.data.message || 'Failed to send reset email');
+        toast.error(response.message || 'Failed to send reset email');
       }
     } catch (error: any) {
       console.error('Password reset request error:', error);

@@ -64,11 +64,11 @@ const VerifyEmail: React.FC = () => {
       const response = await authAPI.verifyEmail(data);
       console.log('Verification response:', response);
       
-      if (response.data.success) {
+      if (response.success) {
         toast.success('Email verified successfully! You can now login.');
         navigate('/auth/login');
       } else {
-        toast.error(response.data.message || 'Email verification failed');
+        toast.error(response.message || 'Email verification failed');
       }
     } catch (error: any) {
       console.error('Email verification error:', error);
@@ -103,11 +103,11 @@ const VerifyEmail: React.FC = () => {
       setResendLoading(true);
       const response = await authAPI.resendVerification(email);
       
-      if (response.data.success) {
+      if (response.success) {
         toast.success('Verification email sent! Please check your inbox.');
         setResendCooldown(60); // 60 seconds cooldown
       } else {
-        toast.error(response.data.message || 'Failed to resend verification email');
+        toast.error(response.message || 'Failed to resend verification email');
       }
     } catch (error: any) {
       console.error('Resend verification error:', error);
