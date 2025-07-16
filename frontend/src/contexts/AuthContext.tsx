@@ -143,9 +143,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const response = await authAPI.login(credentials);
       
-      // The API client returns ApiResponse<AuthResponse>
-      if (response.success && response.data) {
-        const { user, token, refreshToken } = response.data;
+      // The API client now returns the extracted data directly
+      if (response && response.success) {
+        const { user, token, refreshToken } = response;
         
         const tokens = {
           accessToken: token,
@@ -166,7 +166,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         
         toast.success('Successfully logged in!');
       } else {
-        throw new Error(response.message || 'Invalid response format');
+        throw new Error(response?.message || 'Invalid response format');
       }
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || 'Login failed';
@@ -193,10 +193,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const response = await authAPI.register(registerData);
       
-      if (response.success) {
+      if (response && response.success) {
         toast.success('Account created successfully! Please check your email for verification.');
       } else {
-        throw new Error(response.message || 'Registration failed');
+        throw new Error(response?.message || 'Registration failed');
       }
     } catch (error: any) {
       const message = error.response?.data?.message || error.message || 'Registration failed';
@@ -225,8 +225,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       const response = await authAPI.refreshToken();
 
-      if (response.data) {
-        const { token, refreshToken: newRefreshToken } = response.data;
+      if (response && response.success) {
+        const { token, refreshToken: newRefreshToken } = response;
         localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
         if (newRefreshToken) {
           localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, newRefreshToken);

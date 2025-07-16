@@ -302,6 +302,24 @@ export interface AuthResponse {
   refreshToken?: string;
 }
 
+export interface RegisterResponse {
+  success: boolean;
+  message: string;
+  data: {
+    user: {
+      _id: string;
+      userId: string;
+      email: string;
+      username: string;
+      isEmailVerified: boolean;
+      level: number;
+      energy: number;
+    };
+    verificationRequired: boolean;
+    verificationSent: boolean;
+  };
+}
+
 export interface VerifyEmailRequest {
   email: string;
   verificationCode: string;

@@ -4,6 +4,7 @@ import {
   RegisterRequest, 
   User, 
   AuthResponse,
+  RegisterResponse,
   VerifyEmailRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
@@ -15,10 +16,10 @@ import {
 export const authAPI = {
   // Public auth endpoints
   register: (data: RegisterRequest) => 
-    apiClient.post<AuthResponse>('/auth/register', data),
+    apiClient.post<RegisterResponse>('/auth/register', data).then(res => res.data),
 
   login: (data: LoginRequest) => 
-    apiClient.post<AuthResponse>('/auth/login', data),
+    apiClient.post<AuthResponse>('/auth/login', data).then(res => res.data),
 
   verifyEmail: (data: VerifyEmailRequest) => 
     apiClient.post('/auth/verify-email', data).then(res => res.data),
@@ -33,7 +34,7 @@ export const authAPI = {
     apiClient.post('/auth/reset-password', data).then(res => res.data),
 
   refreshToken: () => 
-    apiClient.post<AuthResponse>('/auth/refresh'),
+    apiClient.post<AuthResponse>('/auth/refresh-token').then(res => res.data),
 
   // Protected auth endpoints (require authentication)
   getProfile: () => 
