@@ -97,16 +97,15 @@ const Profile: React.FC = () => {
   const onProfileSubmit = async (data: UpdateProfileRequest) => {
     try {
       setProfileLoading(true);
-      const response = await authAPI.updateProfile(data);
+      const updatedUser = await authAPI.updateProfile(data);
       
-      if (response.data) {
+      if (updatedUser) {
         await refreshUser();
         toast.success('Profile updated successfully!');
         resetProfile(data);
       }
     } catch (error: any) {
-      console.error('Profile update error:', error);
-      const message = error.response?.data?.message || 'Failed to update profile';
+      const message = error.response?.data?.message || error.message || 'Failed to update profile';
       toast.error(message);
     } finally {
       setProfileLoading(false);
@@ -152,19 +151,19 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900 mb-4">Profile Settings</h1>
-        <p className="text-gray-600">Manage your account information and preferences</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">Profile Settings</h1>
+        <p className="text-gray-600 text-sm sm:text-base">Manage your account information and preferences</p>
       </div>
 
       {/* Profile Overview Card */}
       <div className="card">
-        <div className="flex items-center space-x-6">
+        <div className="flex flex-col sm:flex-row items-center sm:space-x-6 space-y-4 sm:space-y-0">
           {/* Avatar */}
           <div className="relative">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
               {user.avatar ? (
                 <img
                   src={user.avatar}

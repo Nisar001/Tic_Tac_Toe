@@ -164,10 +164,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const response = await chatAPI.getChatRooms();
-      // Handle new API response format
-      const rooms = Array.isArray(response.data) 
-        ? response.data 
-        : (response.data?.rooms || []);
+      // The chat service now returns the data directly
+      const rooms = response?.data?.rooms || [];
       dispatch({ type: 'SET_ROOMS', payload: rooms });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load chat rooms' });
@@ -199,9 +197,10 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   const sendMessage = async (roomId: string, content: string) => {
     try {
-      await chatAPI.sendMessage(roomId, {
+      await chatAPI.sendMessage({
         message: content,
         type: 'text',
+        roomId: roomId,
       });
       
       if (socket) {
@@ -215,10 +214,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const loadMessages = async (roomId: string, page = 1) => {
     try {
       const response = await chatAPI.getChatHistory(roomId, page, 50);
-      // Handle new API response format
-      const messages = Array.isArray(response.data) 
-        ? response.data 
-        : (response.data?.messages || []);
+      // The chat service now returns the data directly
+      const messages = response?.data?.messages || [];
       dispatch({ type: 'SET_MESSAGES', payload: { roomId, messages } });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load messages' });

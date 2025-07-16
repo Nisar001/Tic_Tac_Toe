@@ -24,13 +24,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       
-      {/* Main content */}
-      <div className="lg:pl-64">
+      {/* Main content wrapper */}
+      <div className="lg:pl-64 min-h-screen">
         {/* Header */}
         <Header onMenuClick={() => setSidebarOpen(true)} />
         
         {/* Page content */}
-        <main className="px-4 sm:px-6 lg:px-8 py-8">
+        <main className="px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
@@ -40,7 +40,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden"
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
           onClick={() => setSidebarOpen(false)}
         />
       )}

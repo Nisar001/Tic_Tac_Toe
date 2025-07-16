@@ -1,5 +1,5 @@
 import { Types } from 'mongoose';
-import { logError, logDebug } from './logger';
+import { logError } from './logger';
 
 export interface Player {
   userId: Types.ObjectId;
@@ -178,7 +178,6 @@ export class MatchmakingManager {
         joinedAt: new Date()
       });
 
-      logDebug(`Player ${validation.sanitizedPlayer!.username} added to matchmaking queue`);
       return { success: true };
     } catch (error) {
       logError(`Add to queue error: ${error instanceof Error ? error.message : 'Unknown error'}`);

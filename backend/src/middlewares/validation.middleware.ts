@@ -681,3 +681,67 @@ export const validatePagination: ValidationChain[] = [
     .isInt({ min: 0 })
     .withMessage('Offset must be a non-negative integer')
 ];
+
+/**
+ * User ID validation
+ */
+export const validateUserId: ValidationChain[] = [
+  param('userId')
+    .notEmpty()
+    .withMessage('User ID is required')
+    .isMongoId()
+    .withMessage('Invalid User ID')
+];
+
+/**
+ * Request ID validation
+ */
+export const validateRequestId: ValidationChain[] = [
+  param('requestId')
+    .notEmpty()
+    .withMessage('Request ID is required')
+    .isMongoId()
+    .withMessage('Invalid Request ID')
+];
+
+/**
+ * Friend ID validation
+ */
+export const validateFriendId: ValidationChain[] = [
+  param('friendId')
+    .notEmpty()
+    .withMessage('Friend ID is required')
+    .isMongoId()
+    .withMessage('Invalid Friend ID')
+];
+
+/**
+ * Search query validation
+ */
+export const validateSearchQuery: ValidationChain[] = [
+  query('q')
+    .notEmpty()
+    .withMessage('Search query is required')
+    .isLength({ min: 2, max: 50 })
+    .withMessage('Search query must be between 2 and 50 characters')
+    .trim()
+    .escape()
+];
+
+/**
+ * Friend request validation
+ */
+export const validateFriendRequestCreate: ValidationChain[] = [
+  body('receiverId')
+    .notEmpty()
+    .withMessage('Receiver ID is required')
+    .isMongoId()
+    .withMessage('Invalid Receiver ID'),
+
+  body('message')
+    .optional()
+    .isLength({ max: 200 })
+    .withMessage('Message cannot exceed 200 characters')
+    .trim()
+    .escape()
+];

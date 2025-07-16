@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from 'mongoose';
-import { logError, logDebug } from '../utils/logger';
+import { logError } from '../utils/logger';
 
 export interface IUser extends Document {
   lastRoomJoinTime: any;
@@ -8,6 +8,7 @@ export interface IUser extends Document {
   password?: string;
   username: string;
   avatar?: string;
+  role: 'user' | 'moderator' | 'admin';
   provider: 'manual' | 'google' | 'facebook';
   providerId?: string;
   level: number;
@@ -34,6 +35,7 @@ export interface IUser extends Document {
     sent: mongoose.Types.ObjectId[];
     received: mongoose.Types.ObjectId[];
   };
+  blockedUsers?: mongoose.Types.ObjectId[];
   stats: {
     wins: number;
     losses: number;
@@ -53,6 +55,7 @@ export interface IUser extends Document {
   deletedAt?: Date;
   bio?: string;
   isBlocked?: boolean;
+  isActive?: boolean;
   lastProfileUpdate?: Date;
   lastPasswordResetRequest?: Date;
   lastVerificationRequest?: Date;
@@ -111,6 +114,11 @@ const UserSchema = new Schema<IUser>({
     type: String,
     default: 'https://via.placeholder.com/150x150?text=Avatar'
   },
+  role: {
+    type: String,
+    enum: ['user', 'moderator', 'admin'],
+    default: 'user'
+  },
   provider: { 
     type: String, 
     enum: ['manual', 'google', 'facebook'], 
@@ -141,6 +149,7 @@ const UserSchema = new Schema<IUser>({
     sent: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     received: [{ type: Schema.Types.ObjectId, ref: 'User' }]
   },
+  blockedUsers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
   stats: {
     wins: { type: Number, default: 0, min: 0 },
     losses: { type: Number, default: 0, min: 0 },
@@ -160,6 +169,7 @@ const UserSchema = new Schema<IUser>({
   deletedAt: { type: Date },
   bio: { type: String },
   isBlocked: { type: Boolean, default: false },
+  isActive: { type: Boolean, default: true },
   lastProfileUpdate: { type: Date },  
   lastPasswordResetRequest: { type: Date },
   lastVerificationRequest: { type: Date },

@@ -268,6 +268,8 @@ export interface GameMoveRequest {
 export interface SendMessageRequest {
   message: string;
   type?: 'text' | 'system';
+  roomId?: string;
+  gameId?: string;
 }
 
 // API Response type

@@ -13,51 +13,51 @@ import {
 export const gameAPI = {
   // Game management
   createGame: (data: CreateGameRequest) => 
-    apiClient.post<Game>('/game/create', data),
+    apiClient.post<{ data: Game }>('/game/create', data).then(res => res.data?.data),
 
-  joinGame: (roomId: string) => 
-    apiClient.post(`/game/join/${roomId}`),
+  joinGame: (gameId: string) => 
+    apiClient.post<{ data: Game }>(`/game/${gameId}/join`).then(res => res.data?.data),
 
-  getGameState: (roomId: string) => 
-    apiClient.get<Game>(`/game/state/${roomId}`),
+  getGameState: (gameId: string) => 
+    apiClient.get<{ data: Game }>(`/game/${gameId}`).then(res => res.data?.data),
 
   getActiveGames: () => 
-    apiClient.get<{ games: Game[]; totalActiveGames: number }>('/game/active'),
+    apiClient.get<{ data: { games: Game[]; totalActiveGames: number } }>('/game/active').then(res => res.data?.data),
 
-  makeMove: (roomId: string, data: MakeMoveRequest) => 
-    apiClient.post<Game>(`/game/move/${roomId}`, data),
+  makeMove: (gameId: string, data: MakeMoveRequest) => 
+    apiClient.post<{ data: Game }>(`/game/${gameId}/move`, data).then(res => res.data?.data),
 
   forfeitGame: (roomId: string) => 
-    apiClient.post<Game>(`/game/forfeit/${roomId}`),
+    apiClient.post<{ data: Game }>(`/game/forfeit/${roomId}`).then(res => res.data?.data),
 
   getUserGameStats: () => 
-    apiClient.get<UserStats>('/game/stats'),
+    apiClient.get<{ data: UserStats }>('/game/stats').then(res => res.data?.data),
 
   getLeaderboard: (page: number = 1, limit: number = 10) => 
-    apiClient.get<LeaderboardResponse>(`/game/leaderboard?page=${page}&limit=${limit}`),
+    apiClient.get<{ data: LeaderboardResponse }>(`/game/leaderboard?page=${page}&limit=${limit}`).then(res => res.data?.data),
 
   getGameHistory: (page: number = 1, limit: number = 10) =>
-    apiClient.get<{ games: Game[]; pagination: any }>(`/game/history?page=${page}&limit=${limit}`),
+    apiClient.get<{ data: { games: Game[]; pagination: any } }>(`/game/history?page=${page}&limit=${limit}`).then(res => res.data?.data),
 
   // Matchmaking
   joinMatchmakingQueue: (data: MatchmakingRequest) => 
-    apiClient.post('/game/matchmaking/join', data),
+    apiClient.post<{ data: MatchmakingStatus }>('/game/matchmaking/join', data).then(res => res.data?.data),
 
   leaveMatchmakingQueue: () => 
-    apiClient.post('/game/matchmaking/leave'),
+    apiClient.post('/game/matchmaking/leave').then(res => res.data),
 
   getMatchmakingStatus: () => 
-    apiClient.get<MatchmakingStatus>('/game/matchmaking/status'),
+    apiClient.get<{ data: MatchmakingStatus }>('/game/matchmaking/status').then(res => res.data?.data),
 
   getQueueStats: () => 
-    apiClient.get<QueueStats>('/game/matchmaking/stats'),
+    apiClient.get<{ data: QueueStats }>('/game/matchmaking/stats').then(res => res.data?.data),
 
   // Admin only
   forceMatch: (player1Id: string, player2Id: string) => 
-    apiClient.post('/game/admin/force-match', { player1Id, player2Id }),
+    apiClient.post('/game/admin/force-match', { player1Id, player2Id }).then(res => res.data),
 
   cleanupQueue: () => 
-    apiClient.post('/game/admin/cleanup-queue'),
+    apiClient.post('/game/admin/cleanup-queue').then(res => res.data),
 };
 
 export default gameAPI;

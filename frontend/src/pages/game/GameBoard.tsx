@@ -105,14 +105,14 @@ const GameBoard: React.FC = () => {
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8">
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
       {/* Game Header */}
       <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold text-gray-900">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
             Game #{roomId?.slice(0, 8)}
           </h1>
-          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+          <span className={`px-3 py-1 rounded-full text-sm font-medium w-fit ${
             currentGame.status === 'waiting' 
               ? 'bg-yellow-100 text-yellow-800'
               : currentGame.status === 'active'
@@ -124,7 +124,7 @@ const GameBoard: React.FC = () => {
         </div>
 
         {/* Players */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           {[currentGame.players.player1, currentGame.players.player2].filter(Boolean).map((player, index) => {
             const playerObj = typeof player === 'string' ? { id: player, username: 'Player', symbol: index === 0 ? 'X' : 'O', isConnected: true } : player;
             return (
@@ -171,7 +171,7 @@ const GameBoard: React.FC = () => {
       {/* Game Board */}
       <div className="card">
         <div className="flex justify-center">
-          <div className="grid grid-cols-3 gap-2 p-4">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 p-4 max-w-xs sm:max-w-sm">
             {board.map((row, rowIndex) =>
               row.map((_, colIndex) => renderCell(rowIndex, colIndex))
             )}
@@ -182,21 +182,21 @@ const GameBoard: React.FC = () => {
       {/* Game Result */}
       {currentGame.status === 'completed' && (
         <div className="card text-center">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">
+          <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-2">
             Game Over!
           </h2>
           {currentGame.winner ? (
-            <p className="text-lg text-green-600 mb-4">
+            <p className="text-base sm:text-lg text-green-600 mb-4">
               🎉 {currentGame.winner === user?.id ? 'You won!' : 'You lost!'}
             </p>
           ) : (
-            <p className="text-lg text-gray-600 mb-4">
+            <p className="text-base sm:text-lg text-gray-600 mb-4">
               It's a draw!
             </p>
           )}
           <button
             onClick={() => navigate('/')}
-            className="btn-primary"
+            className="btn-primary w-full sm:w-auto"
           >
             Back to Dashboard
           </button>
@@ -206,10 +206,10 @@ const GameBoard: React.FC = () => {
       {/* Game Actions */}
       {currentGame.status === 'active' && (
         <div className="card">
-          <div className="flex justify-center space-x-4">
+          <div className="flex flex-col sm:flex-row justify-center gap-3 sm:space-x-4">
             <button
               onClick={() => navigate('/')}
-              className="btn-secondary"
+              className="btn-secondary w-full sm:w-auto"
             >
               Leave Game
             </button>
@@ -220,7 +220,7 @@ const GameBoard: React.FC = () => {
                   navigate('/');
                 }
               }}
-              className="btn-danger"
+              className="btn-danger w-full sm:w-auto"
             >
               Forfeit
             </button>

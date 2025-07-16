@@ -4,6 +4,7 @@ import { ApiResponse } from '../types';
 
 class ApiClient {
   private instance: AxiosInstance;
+  private onTokenExpired?: () => void;
 
   constructor() {
     this.instance = axios.create({
@@ -16,6 +17,11 @@ class ApiClient {
     });
 
     this.setupInterceptors();
+  }
+
+  // Method to set callback for when tokens expire
+  setTokenExpiredCallback(callback: () => void): void {
+    this.onTokenExpired = callback;
   }
 
   private setupInterceptors(): void {
@@ -59,9 +65,14 @@ class ApiClient {
               return this.instance(originalRequest);
             }
           } catch (refreshError) {
-            // Refresh failed, clear tokens and redirect to login
-            this.clearTokens();
-            window.location.href = '/auth/login';
+            // Refresh failed, call the token expired callback
+            if (this.onTokenExpired) {
+              this.onTokenExpired();
+            } else {
+              // Fallback to direct redirect if no callback is set
+              this.clearTokens();
+              window.location.href = '/auth/login';
+            }
             return Promise.reject(refreshError);
           }
         }

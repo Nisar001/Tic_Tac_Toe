@@ -6,6 +6,7 @@ import { SocketProvider } from './contexts/SocketContext';
 import { GameProvider } from './contexts/GameContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { FriendsProvider } from './contexts/FriendsContext';
+import { NotificationsProvider } from './contexts/NotificationsContext';
 import { MatchmakingProvider } from './contexts/MatchmakingContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
@@ -22,12 +23,11 @@ import GameBoard from './pages/game/GameBoard';
 import { Chat } from './pages/chat/Chat';
 import { Friends } from './pages/friends/Friends';
 import { Matchmaking } from './pages/matchmaking/Matchmaking';
+import { Notifications } from './pages/Notifications';
 import { Admin } from './pages/admin/Admin';
 import Leaderboard from './pages/Leaderboard';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
-import LoginDebug from './components/LoginDebug';
-import SocialAuthTest from './components/SocialAuthTest';
 
 function App() {
   return (
@@ -36,7 +36,8 @@ function App() {
         <GameProvider>
           <ChatProvider>
             <FriendsProvider>
-              <MatchmakingProvider>
+              <NotificationsProvider>
+                <MatchmakingProvider>
                 <Router>
                   <div className="App">
               <Toaster
@@ -72,8 +73,6 @@ function App() {
                 <Route path="/auth/reset-password" element={<ResetPassword />} />
                 <Route path="/auth/verify-email" element={<VerifyEmail />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
-                <Route path="/debug" element={<LoginDebug />} />
-                <Route path="/social-test" element={<SocialAuthTest />} />
                 
                 {/* Protected routes */}
                 <Route path="/" element={
@@ -116,6 +115,14 @@ function App() {
                   </ProtectedRoute>
                 } />
                 
+                <Route path="/notifications" element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Notifications />
+                    </Layout>
+                  </ProtectedRoute>
+                } />
+                
                 <Route path="/chat" element={
                   <ProtectedRoute>
                     <Layout>
@@ -154,7 +161,8 @@ function App() {
             </div>
           </Router>
         </MatchmakingProvider>
-      </FriendsProvider>
+      </NotificationsProvider>
+    </FriendsProvider>
     </ChatProvider>
   </GameProvider>
 </SocketProvider>

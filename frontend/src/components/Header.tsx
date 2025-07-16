@@ -1,9 +1,9 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import { NotificationDropdown } from './notifications';
 import { 
   Bars3Icon, 
-  BellIcon, 
   WifiIcon,
   ExclamationTriangleIcon 
 } from '@heroicons/react/24/outline';
@@ -54,9 +54,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
             </div>
 
             {/* Notifications */}
-            <button className="p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500">
-              <BellIcon className="h-6 w-6" />
-            </button>
+            <NotificationDropdown />
 
             {/* User menu */}
             <div className="flex items-center">

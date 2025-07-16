@@ -165,10 +165,10 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
   const loadFriends = async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await friendsAPI.getFriends();
-      if (response.data) {
+      const users = await friendsAPI.getFriends();
+      if (users && Array.isArray(users)) {
         // Transform User[] to Friend[] 
-        const friends: Friend[] = response.data.map(user => ({
+        const friends: Friend[] = users.map(user => ({
           id: user.id || user._id,
           user: user,
           friendSince: user.createdAt || new Date().toISOString(),
@@ -184,10 +184,8 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
   const loadFriendRequests = async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await friendsAPI.getFriendRequests();
-      if (response.data) {
-        dispatch({ type: 'SET_FRIEND_REQUESTS', payload: response.data });
-      }
+      const requests = await friendsAPI.getFriendRequests();
+      dispatch({ type: 'SET_FRIEND_REQUESTS', payload: requests });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load friend requests' });
     }
@@ -195,11 +193,11 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
 
   const sendFriendRequest = async (data: { receiverEmail?: string; receiverUsername?: string; message?: string }) => {
     try {
-      const response = await friendsAPI.sendFriendRequest({ 
+      const request = await friendsAPI.sendFriendRequest({ 
         username: data.receiverUsername || data.receiverEmail || '' 
       });
-      if (response.data) {
-        dispatch({ type: 'ADD_FRIEND_REQUEST', payload: { type: 'sent', request: response.data } });
+      if (request) {
+        dispatch({ type: 'ADD_FRIEND_REQUEST', payload: { type: 'sent', request } });
       }
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to send friend request' });
@@ -236,8 +234,8 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
 
   const searchUsers = async (query: string) => {
     try {
-      const response = await friendsAPI.searchUsers(query);
-      return response.data || [];
+      const users = await friendsAPI.searchUsers(query);
+      return users || [];
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to search users' });
       return [];

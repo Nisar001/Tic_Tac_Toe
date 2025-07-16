@@ -34,8 +34,8 @@ const AuthCallback: React.FC = () => {
           
           try {
             // Get user profile using the new token
-            const response = await authAPI.getProfile();
-            if (response.success && response.data) {
+            const user = await authAPI.getProfile();
+            if (user) {
               // Use the existing refresh token method to update the context
               await refreshToken();
               

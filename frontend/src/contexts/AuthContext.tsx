@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import authAPI from '../services/auth';
+import { apiClient } from '../services/api';
 import { STORAGE_KEYS } from '../constants';
 import {
   AuthContextType,
@@ -74,6 +75,14 @@ interface AuthProviderProps {
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
+  // Set up API client callback for token expiration
+  useEffect(() => {
+    apiClient.setTokenExpiredCallback(() => {
+      clearAuth();
+      toast.error('Session expired. Please login again.');
+    });
+  }, []);
+
   useEffect(() => {
     initializeAuth();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -86,34 +95,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         refreshToken: localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN),
       };
 
-      if (storedUser && storedTokens.accessToken && storedTokens.refreshToken) {
-        const user = JSON.parse(storedUser);
-        dispatch({ type: 'SET_USER', payload: user });
-        dispatch({
-          type: 'SET_TOKENS',
-          payload: {
-            accessToken: storedTokens.accessToken,
-            refreshToken: storedTokens.refreshToken,
-            expiresIn: 3600, // Default value
-          },
-        });
-
-        // Verify token validity by fetching user profile
+      if (storedUser && storedTokens.accessToken) {
+        // Set loading state
+        dispatch({ type: 'SET_LOADING', payload: true });
+        
         try {
-          const response = await authAPI.getProfile();
-          if (response.data) {
-            dispatch({ type: 'SET_USER', payload: response.data });
+          // Verify token by fetching fresh user profile
+          const user = await authAPI.getProfile();
+          if (user) {
+            // Only set user and tokens if verification succeeds
+            dispatch({ type: 'SET_USER', payload: user });
+            dispatch({
+              type: 'SET_TOKENS',
+              payload: {
+                accessToken: storedTokens.accessToken,
+                refreshToken: storedTokens.refreshToken || '',
+                expiresIn: 3600,
+              },
+            });
+          } else {
+            console.warn('Profile verification returned null user');
+            clearAuth();
           }
         } catch (error) {
-          // Token invalid, clear auth
-          clearAuth();
+          console.error('Token verification failed:', error);
+          // Check if it's a network error vs auth error
+          if (error instanceof Error && error.message.includes('Network Error')) {
+            // Network issue - keep tokens but show as not authenticated until network recovers
+            dispatch({ type: 'SET_LOADING', payload: false });
+          } else {
+            // Auth error - clear everything
+            clearAuth();
+          }
         }
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
       }
     } catch (error) {
       console.error('Auth initialization error:', error);
-      dispatch({ type: 'SET_LOADING', payload: false });
+      clearAuth();
     }
   };
 
@@ -121,11 +141,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      console.log('AuthContext: Attempting login...');
       const response = await authAPI.login(credentials);
-      console.log('AuthContext: Login response:', response);
       
-      if (response.data) {
+      // The API client returns ApiResponse<AuthResponse>
+      if (response.success && response.data) {
         const { user, token, refreshToken } = response.data;
         
         const tokens = {
@@ -145,14 +164,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         dispatch({ type: 'SET_USER', payload: user });
         dispatch({ type: 'SET_TOKENS', payload: tokens });
         
-        console.log('AuthContext: Login successful, user:', user);
         toast.success('Successfully logged in!');
       } else {
-        throw new Error('Invalid response format');
+        throw new Error(response.message || 'Invalid response format');
       }
     } catch (error: any) {
-      console.error('AuthContext: Login error:', error);
-      
       const message = error.response?.data?.message || error.message || 'Login failed';
       toast.error(message);
       
@@ -175,17 +191,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         confirmPassword: credentials.confirmPassword,
       };
       
-      console.log('Sending registration data:', registerData);
       const response = await authAPI.register(registerData);
-      console.log('Registration response:', response);
       
-      if (response.data) {
+      if (response.success) {
         toast.success('Account created successfully! Please check your email for verification.');
+      } else {
+        throw new Error(response.message || 'Registration failed');
       }
     } catch (error: any) {
-      console.error('Registration error:', error);
-      console.error('Error response:', error.response?.data);
-      const message = error.response?.data?.message || 'Registration failed';
+      const message = error.response?.data?.message || error.message || 'Registration failed';
       toast.error(message);
       throw error;
     } finally {
@@ -235,14 +249,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const refreshUser = async () => {
     try {
-      const response = await authAPI.getProfile();
-      if (response.data) {
-        const updatedUser = response.data;
+      const updatedUser = await authAPI.getProfile();
+      if (updatedUser) {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
         dispatch({ type: 'SET_USER', payload: updatedUser });
+      } else {
+        throw new Error('Failed to get user profile');
       }
     } catch (error) {
-      console.error('Failed to refresh user data:', error);
       throw error;
     }
   };
@@ -251,16 +265,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await authAPI.updateProfile(data);
-      
-      if (response.data) {
-        const updatedUser = response.data;
+      const updatedUser = await authAPI.updateProfile(data);
+      if (updatedUser) {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
         dispatch({ type: 'UPDATE_USER', payload: updatedUser });
         toast.success('Profile updated successfully!');
+      } else {
+        throw new Error('Failed to update profile');
       }
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Profile update failed';
+      const message = error.response?.data?.message || error.message || 'Profile update failed';
       toast.error(message);
       throw error;
     } finally {

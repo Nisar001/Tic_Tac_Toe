@@ -156,14 +156,13 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await gameAPI.createGame(request);
-      
-      if (response.data) {
-        return response.data as Game;
+      const game = await gameAPI.createGame(request);
+      if (!game) {
+        throw new Error('Failed to create game');
       }
-      throw new Error('Failed to create game');
+      return game;
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to create game';
+      const message = error.response?.data?.message || error.message || 'Failed to create game';
       toast.error(message);
       throw error;
     } finally {
@@ -175,14 +174,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       
-      const response = await gameAPI.joinGame(roomId);
+      const game = await gameAPI.joinGame(roomId);
       
-      if (response.data) {
+      if (game) {
         // Game join will be handled by socket event
-        return response.data;
+        return game;
       }
+      throw new Error('Failed to join game');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to join game';
+      const message = error.response?.data?.message || error.message || 'Failed to join game';
       toast.error(message);
       throw error;
     } finally {
@@ -193,17 +193,17 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   // Replace makeMove to use REST API
   const makeMove = async (request: GameMoveRequest) => {
     try {
-      const response = await gameAPI.makeMove(request.roomId, {
+      const game = await gameAPI.makeMove(request.roomId, {
         row: request.position.row,
         col: request.position.col
       });
-      if (response.data) {
+      if (game) {
         // Optionally update state here if not using sockets
-        return response.data;
+        return game;
       }
       throw new Error('Move failed');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Invalid move';
+      const message = error.response?.data?.message || error.message || 'Invalid move';
       toast.error(message);
       throw error;
     }
@@ -211,14 +211,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const forfeitGame = async (roomId: string) => {
     try {
-      const response = await gameAPI.forfeitGame(roomId);
+      const game = await gameAPI.forfeitGame(roomId);
       
-      if (response.data) {
+      if (game) {
         toast.success('Game forfeited');
-        return response.data;
+        return game;
       }
+      throw new Error('Failed to forfeit game');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to forfeit game';
+      const message = error.response?.data?.message || error.message || 'Failed to forfeit game';
       toast.error(message);
       throw error;
     }
@@ -226,14 +227,14 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
 
   const getGameState = async (roomId: string): Promise<Game> => {
     try {
-      const response = await gameAPI.getGameState(roomId);
+      const game = await gameAPI.getGameState(roomId);
       
-      if (response.data) {
-        return response.data;
+      if (game) {
+        return game;
       }
       throw new Error('Failed to get game state');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to get game state';
+      const message = error.response?.data?.message || error.message || 'Failed to get game state';
       toast.error(message);
       throw error;
     }
@@ -243,29 +244,28 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     try {
       const response = await gameAPI.getActiveGames();
       
-      if (response.data) {
+      if (response) {
         // Handle new API response format
-        const games = response.data.games || response.data;
+        const games = response.games || [];
         dispatch({ type: 'SET_GAMES', payload: games });
-        return response.data; // Return the full response for backward compatibility
+        return response; // Return the full response for backward compatibility
       }
       return [];
     } catch (error: any) {
-      console.error('Failed to get active games:', error);
       return [];
     }
   };
 
   const getUserStats = async (): Promise<UserStats> => {
     try {
-      const response = await gameAPI.getUserGameStats();
+      const stats = await gameAPI.getUserGameStats();
       
-      if (response.data) {
-        return response.data;
+      if (stats) {
+        return stats;
       }
       throw new Error('Failed to get user stats');
     } catch (error: any) {
-      const message = error.response?.data?.message || 'Failed to get user stats';
+      const message = error.response?.data?.message || error.message || 'Failed to get user stats';
       toast.error(message);
       throw error;
     }
@@ -275,13 +275,12 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     try {
       const response = await gameAPI.getLeaderboard(page, limit);
       
-      if (response.data) {
+      if (response) {
         // Extract the entries array from the leaderboard response
-        return response.data.entries || [];
+        return response.entries || [];
       }
       return [];
     } catch (error: any) {
-      console.error('Failed to get leaderboard:', error);
       return [];
     }
   };

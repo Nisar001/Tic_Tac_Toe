@@ -44,7 +44,7 @@ export const matchmakingService = {
   // Join the matchmaking queue
   joinQueue: async (preferences?: MatchmakingPreferences): Promise<MatchmakingStatus> => {
     const response = await apiClient.post('/game/matchmaking/join', { preferences });
-    return response.data.data;
+    return response.data;
   },
 
   // Leave the matchmaking queue
@@ -55,18 +55,12 @@ export const matchmakingService = {
   // Get current matchmaking status
   getStatus: async (): Promise<MatchmakingStatus> => {
     const response = await apiClient.get('/game/matchmaking/status');
-    return response.data.data;
+    return response.data;
   },
 
   // Get matchmaking statistics
   getStats: async (): Promise<MatchmakingStats> => {
     const response = await apiClient.get('/game/matchmaking/stats');
-    return response.data.data;
+    return response.data;
   },
-
-  // Update matchmaking preferences
-  updatePreferences: async (preferences: MatchmakingPreferences): Promise<MatchmakingStatus> => {
-    const response = await apiClient.put('/game/matchmaking/preferences', { preferences });
-    return response.data.data;
-  }
 };

@@ -37,8 +37,8 @@ const Dashboard: React.FC = () => {
 
       const [gamesResponse, stats] = await Promise.all([gamesPromise, statsPromise]);
       
-      // Handle new API response format
-      const games = gamesResponse?.games || gamesResponse || [];
+      // Handle new API response format - the services now return the data directly
+      const games = gamesResponse?.games || [];
       setActiveGames(Array.isArray(games) ? games : []);
       setUserStats(stats);
     } catch (error) {
@@ -75,19 +75,19 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 lg:space-y-8">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-8 text-white">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">
+      <div className="bg-gradient-to-r from-primary-600 to-primary-700 rounded-2xl p-6 lg:p-8 text-white">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+          <div className="mb-4 lg:mb-0">
+            <h1 className="text-2xl lg:text-3xl font-bold mb-2">
               Welcome back, {user?.username}!
             </h1>
-            <p className="text-primary-100 text-lg">
+            <p className="text-primary-100 text-base lg:text-lg">
               Ready for another game? Let's see what you've got!
             </p>
           </div>
-          <div className="hidden md:block">
+          <div className="flex justify-center lg:block">
             <div className="flex items-center space-x-4">
               <div className="text-center">
                 <div className="flex items-center justify-center w-12 h-12 bg-white/20 rounded-full mb-2">
@@ -102,7 +102,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-6">
         <div 
           className="card hover:shadow-xl transition-shadow duration-200 cursor-pointer group"
           onClick={handleCreateGame}
@@ -134,7 +134,7 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div 
-          className="card hover:shadow-xl transition-shadow duration-200 cursor-pointer group"
+          className="card hover:shadow-xl transition-shadow duration-200 cursor-pointer group sm:col-span-2 lg:col-span-1"
           onClick={() => navigate('/leaderboard')}
         >
           <div className="flex items-center">
@@ -151,33 +151,33 @@ const Dashboard: React.FC = () => {
 
       {/* Stats Section */}
       {userStats && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
           <div className="card text-center">
-            <div className="text-3xl font-bold text-primary-600 mb-2">
+            <div className="text-2xl lg:text-3xl font-bold text-primary-600 mb-2">
               {userStats?.gamesPlayed || 0}
             </div>
-            <p className="text-gray-600">Games Played</p>
+            <p className="text-gray-600 text-sm lg:text-base">Games Played</p>
           </div>
           
           <div className="card text-center">
-            <div className="text-3xl font-bold text-success-600 mb-2">
+            <div className="text-2xl lg:text-3xl font-bold text-success-600 mb-2">
               {userStats?.wins || 0}
             </div>
-            <p className="text-gray-600">Games Won</p>
+            <p className="text-gray-600 text-sm lg:text-base">Games Won</p>
           </div>
           
           <div className="card text-center">
-            <div className="text-3xl font-bold text-warning-600 mb-2">
+            <div className="text-2xl lg:text-3xl font-bold text-warning-600 mb-2">
               {userStats?.winRate ? `${(userStats.winRate * 100).toFixed(1)}%` : '0%'}
             </div>
-            <p className="text-gray-600">Win Rate</p>
+            <p className="text-gray-600 text-sm lg:text-base">Win Rate</p>
           </div>
           
           <div className="card text-center">
-            <div className="text-3xl font-bold text-error-600 mb-2">
+            <div className="text-2xl lg:text-3xl font-bold text-error-600 mb-2">
               {userStats?.currentStreak || 0}
             </div>
-            <p className="text-gray-600">Current Streak</p>
+            <p className="text-gray-600 text-sm lg:text-base">Current Streak</p>
           </div>
         </div>
       )}

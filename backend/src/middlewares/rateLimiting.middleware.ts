@@ -196,3 +196,39 @@ export const createDynamicRateLimit = (
     )
   });
 };
+
+/**
+ * Search rate limiter
+ */
+export const searchRateLimit = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.NODE_ENV === 'development' ? 100 : 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: createMessage(
+    'Too many search requests, please slow down',
+    5
+  ),
+  handler: rateLimitHandler(
+    5,
+    'Too many search requests, please slow down'
+  )
+});
+
+/**
+ * Block user rate limiter
+ */
+export const blockUserRateLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: process.env.NODE_ENV === 'development' ? 20 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: createMessage(
+    'Too many block/unblock actions, please try again later',
+    10
+  ),
+  handler: rateLimitHandler(
+    10,
+    'Too many block/unblock actions, please try again later'
+  )
+});

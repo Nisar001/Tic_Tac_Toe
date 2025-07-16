@@ -2,6 +2,9 @@ import { Router, Request, Response, NextFunction } from 'express';
 import authRoutes from './modules/auth/routes/auth.routes';
 import gameRoutes from './modules/game/routes/game.routes';
 import chatRoutes from './modules/chat/routes/chat.routes';
+import { friendsRoutes } from './modules/friends';
+import { notificationsRoutes } from './modules/notifications';
+import { adminRoutes } from './modules/admin';
 import { logInfo, logWarn } from './utils/logger';
 import { authenticate } from './middlewares/auth.middleware';
 
@@ -58,6 +61,8 @@ router.get('/', (req: Request, res: Response, next: NextFunction) => {
         auth: '/api/auth',
         game: '/api/game',
         chat: '/api/chat',
+        friends: '/api/friends',
+        notifications: '/api/notifications',
         health: '/health',
         metrics: '/metrics'
       },
@@ -85,6 +90,36 @@ router.get('/', (req: Request, res: Response, next: NextFunction) => {
           'GET /api/chat/history/:gameId',
           'POST /api/chat/send',
           'GET /api/chat/rooms/:roomId/users'
+        ],
+        friendsEndpoints: [
+          'GET /api/friends',
+          'POST /api/friends/request',
+          'GET /api/friends/requests',
+          'POST /api/friends/requests/:requestId/accept',
+          'POST /api/friends/requests/:requestId/reject',
+          'DELETE /api/friends/requests/:requestId',
+          'DELETE /api/friends/:friendId',
+          'GET /api/friends/search',
+          'POST /api/friends/block/:userId',
+          'DELETE /api/friends/block/:userId',
+          'GET /api/friends/blocked'
+        ],
+        notificationsEndpoints: [
+          'GET /api/notifications',
+          'GET /api/notifications/unread-count',
+          'PATCH /api/notifications/:notificationId/read',
+          'PATCH /api/notifications/mark-all-read',
+          'DELETE /api/notifications/:notificationId',
+          'DELETE /api/notifications/read/all'
+        ],
+        adminEndpoints: [
+          'GET /api/admin/stats',
+          'GET /api/admin/users',
+          'GET /api/admin/games',
+          'PUT /api/admin/users/:userId',
+          'DELETE /api/admin/users/:userId',
+          'GET /api/admin/settings',
+          'PUT /api/admin/settings'
         ]
       }
     };
@@ -103,6 +138,9 @@ router.use('/auth', authRoutes);
 // Protected routes (require authentication)
 router.use('/game', authenticate, gameRoutes);
 router.use('/chat', authenticate, chatRoutes);
+router.use('/friends', authenticate, friendsRoutes);
+router.use('/notifications', authenticate, notificationsRoutes);
+router.use('/admin', authenticate, adminRoutes);
 
 // Catch-all for undefined API routes
 router.use('*', (req: Request, res: Response) => {
@@ -110,7 +148,7 @@ router.use('*', (req: Request, res: Response) => {
   res.status(404).json({
     success: false,
     message: 'API endpoint not found',
-    availableEndpoints: ['/auth', '/game', '/chat']
+    availableEndpoints: ['/auth', '/game', '/chat', '/friends', '/notifications', '/admin']
   });
 });
 

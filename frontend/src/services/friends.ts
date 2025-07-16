@@ -7,51 +7,75 @@ import {
 
 export const friendsAPI = {
   // Get all friends
-  getFriends: () => 
-    apiClient.get<User[]>('/friends'),
+  getFriends: async (): Promise<User[]> => {
+    const response = await apiClient.get<{ data: User[] }>('/friends');
+    return response.data?.data || [];
+  },
 
   // Send friend request
-  sendFriendRequest: (data: SendFriendRequestRequest) => 
-    apiClient.post<FriendRequest>('/friends/request', data),
+  sendFriendRequest: async (data: SendFriendRequestRequest): Promise<FriendRequest | null> => {
+    const response = await apiClient.post<{ data: FriendRequest }>('/friends/request', data);
+    return response.data?.data || null;
+  },
 
   // Get friend requests
-  getFriendRequests: () => 
-    apiClient.get<{
-      sent: FriendRequest[];
-      received: FriendRequest[];
-    }>('/friends/requests'),
+  getFriendRequests: async (): Promise<{ sent: FriendRequest[]; received: FriendRequest[] }> => {
+    const response = await apiClient.get<{
+      data: {
+        sent: FriendRequest[];
+        received: FriendRequest[];
+      }
+    }>('/friends/requests');
+    return response.data?.data || { sent: [], received: [] };
+  },
 
   // Accept friend request
-  acceptFriendRequest: (requestId: string) => 
-    apiClient.post(`/friends/requests/${requestId}/accept`),
+  acceptFriendRequest: async (requestId: string) => {
+    const response = await apiClient.post(`/friends/requests/${requestId}/accept`);
+    return response.data;
+  },
 
   // Reject friend request
-  rejectFriendRequest: (requestId: string) => 
-    apiClient.post(`/friends/requests/${requestId}/reject`),
+  rejectFriendRequest: async (requestId: string) => {
+    const response = await apiClient.post(`/friends/requests/${requestId}/reject`);
+    return response.data;
+  },
 
   // Cancel sent friend request
-  cancelFriendRequest: (requestId: string) => 
-    apiClient.delete(`/friends/requests/${requestId}`),
+  cancelFriendRequest: async (requestId: string) => {
+    const response = await apiClient.delete(`/friends/requests/${requestId}`);
+    return response.data;
+  },
 
   // Remove friend
-  removeFriend: (friendId: string) => 
-    apiClient.delete(`/friends/${friendId}`),
+  removeFriend: async (friendId: string) => {
+    const response = await apiClient.delete(`/friends/${friendId}`);
+    return response.data;
+  },
 
   // Block user
-  blockUser: (userId: string) => 
-    apiClient.post(`/friends/block/${userId}`),
+  blockUser: async (userId: string) => {
+    const response = await apiClient.post(`/friends/block/${userId}`);
+    return response.data;
+  },
 
   // Unblock user
-  unblockUser: (userId: string) => 
-    apiClient.delete(`/friends/block/${userId}`),
+  unblockUser: async (userId: string) => {
+    const response = await apiClient.delete(`/friends/block/${userId}`);
+    return response.data;
+  },
 
   // Get blocked users
-  getBlockedUsers: () => 
-    apiClient.get<User[]>('/friends/blocked'),
+  getBlockedUsers: async (): Promise<User[]> => {
+    const response = await apiClient.get<{ data: User[] }>('/friends/blocked');
+    return response.data?.data || [];
+  },
 
   // Search users
-  searchUsers: (query: string) => 
-    apiClient.get<User[]>(`/friends/search?q=${encodeURIComponent(query)}`),
+  searchUsers: async (query: string): Promise<User[]> => {
+    const response = await apiClient.get<{ data: User[] }>(`/friends/search?q=${encodeURIComponent(query)}`);
+    return response.data?.data || [];
+  },
 };
 
 export default friendsAPI;
