@@ -25,7 +25,7 @@ export const chatAPI = {
   },
 
   createChatRoom: (data: { name: string; description?: string }) =>
-    apiClient.post<{ data: ChatRoom }>('/chat/rooms', data).then(res => res.data),
+    apiClient.post('/chat/rooms', data).then(res => res.data.data),
 
   deleteChatRoom: (roomId: string) =>
     apiClient.delete(`/chat/rooms/${roomId}`).then(res => res.data),

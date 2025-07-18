@@ -50,7 +50,6 @@ export const FriendsList: React.FC = () => {
                     icon: FaGamepad,
                     onClick: () => {
                       // TODO: Implement game invitation
-                      console.log('Invite to game:', friend.id);
                     },
                     primary: true,
                   },

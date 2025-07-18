@@ -59,10 +59,8 @@ const VerifyEmail: React.FC = () => {
   const onSubmit = async (data: VerifyEmailRequest) => {
     try {
       setIsLoading(true);
-      console.log('Submitting verification data:', data);
       
       const response = await authAPI.verifyEmail(data);
-      console.log('Verification response:', response);
       
       if (response.success) {
         toast.success('Email verified successfully! You can now login.');

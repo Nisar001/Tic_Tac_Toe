@@ -8,7 +8,7 @@ import { STORAGE_KEYS } from '../../constants';
 
 const AuthCallback: React.FC = () => {
   const navigate = useNavigate();
-  const { refreshToken } = useAuth();
+  const { refreshUser } = useAuth();
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -31,23 +31,14 @@ const AuthCallback: React.FC = () => {
           // Store tokens in localStorage
           localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, token);
           localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshTokenValue);
-          
           try {
-            // Get user profile using the new token
-            const user = await authAPI.getProfile();
-            if (user) {
-              // Use the existing refresh token method to update the context
-              await refreshToken();
-              
-              // Get redirect URL or default to dashboard
-              const redirectUrl = localStorage.getItem('auth_redirect_url') || '/';
-              localStorage.removeItem('auth_redirect_url');
-
-              toast.success(`Successfully logged in with ${provider || 'social provider'}!`);
-              navigate(redirectUrl);
-            } else {
-              throw new Error('Failed to get user profile');
-            }
+            // Use the context method to fetch and set user profile
+            await refreshUser();
+            // Get redirect URL or default to dashboard
+            const redirectUrl = localStorage.getItem('auth_redirect_url') || '/';
+            localStorage.removeItem('auth_redirect_url');
+            toast.success(`Successfully logged in with ${provider || 'social provider'}!`);
+            navigate(redirectUrl);
           } catch (profileError) {
             console.error('Failed to get user profile:', profileError);
             toast.error('Authentication failed: Unable to retrieve user profile');
@@ -68,7 +59,7 @@ const AuthCallback: React.FC = () => {
     };
 
     handleCallback();
-  }, [searchParams, navigate, refreshToken]);
+  }, [searchParams, navigate, refreshUser]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-secondary-50">

@@ -5,7 +5,7 @@ import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
 import { AuthUtils } from '../../../utils/auth.utils';
 import { socketManager } from '../../../server';
 import { MatchmakingManager } from '../../../utils/matchmaking.utils';
-import { EnergyManager } from '../../../utils/energy.utils';
+import { LivesManager } from '../../../utils/lives.utils';
 
 export const matchmakingRateLimit = rateLimit({
   windowMs: 60 * 1000,
@@ -37,15 +37,15 @@ export const joinQueue = asyncHandler(async (req: AuthenticatedRequest, res: Res
     throw createError.badRequest('Skill level must be a number between 1 and 10');
   }
 
-  const energyStatus = EnergyManager.calculateCurrentEnergy(
-    req.user.energy,
-    req.user.lastEnergyUpdate ?? new Date(0),
-    req.user.lastEnergyRegenTime ?? new Date(0)
+  const livesStatus = LivesManager.calculateCurrentLives(
+    req.user.lives,
+    req.user.lastLivesUpdate ?? new Date(0),
+    req.user.lastLivesRegenTime ?? new Date(0)
   );
 
-  if (!energyStatus.canPlay) {
-    const error = createError.badRequest('Insufficient energy to join queue');
-    (error as any).energyStatus = energyStatus;
+  if (!livesStatus.canPlay) {
+    const error = createError.badRequest('Insufficient lives to join queue');
+    (error as any).livesStatus = livesStatus;
     throw error;
   }
 
@@ -66,7 +66,7 @@ export const joinQueue = asyncHandler(async (req: AuthenticatedRequest, res: Res
       message: 'Joined matchmaking queue successfully (REST mode)',
       data: {
         gameMode: sanitizedData.gameMode,
-        energyStatus,
+        livesStatus,
         note: 'WebSocket required for real matchmaking - this is a test response'
       }
     });
@@ -83,7 +83,7 @@ export const joinQueue = asyncHandler(async (req: AuthenticatedRequest, res: Res
       message: 'Joined matchmaking queue successfully (REST mode)',
       data: {
         gameMode: sanitizedData.gameMode,
-        energyStatus,
+        livesStatus,
         note: 'WebSocket connection required for real matchmaking'
       }
     });
@@ -99,7 +99,7 @@ export const joinQueue = asyncHandler(async (req: AuthenticatedRequest, res: Res
     message: 'Joined matchmaking queue successfully',
     data: {
       gameMode: sanitizedData.gameMode,
-      energyStatus
+      livesStatus
     }
   });
 });

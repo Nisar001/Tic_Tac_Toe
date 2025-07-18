@@ -74,7 +74,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <div className="ml-3">
               <p className="text-sm font-medium text-gray-900">{user?.username}</p>
               <p className="text-xs text-gray-500">
-                Energy: {user?.energy || 0}/{user?.maxEnergy || 10}
+                Lives: {user?.lives || 0}/{user?.maxLives || 15}
               </p>
             </div>
           </div>

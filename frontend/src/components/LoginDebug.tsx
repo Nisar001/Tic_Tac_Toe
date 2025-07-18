@@ -12,8 +12,6 @@ const LoginDebug: React.FC = () => {
     setResponse('Testing...');
     
     try {
-      console.log('API_BASE_URL:', API_BASE_URL);
-      console.log('Testing login with:', { email, password });
       
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
@@ -24,7 +22,6 @@ const LoginDebug: React.FC = () => {
       });
       
       const data = await response.json();
-      console.log('Response:', { status: response.status, data });
       
       setResponse(`Status: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}`);
     } catch (error) {
@@ -48,7 +45,6 @@ const LoginDebug: React.FC = () => {
         lastName: 'User'
       };
       
-      console.log('Testing registration with:', registerData);
       
       const response = await fetch(`${API_BASE_URL}/auth/register`, {
         method: 'POST',
@@ -59,7 +55,6 @@ const LoginDebug: React.FC = () => {
       });
       
       const data = await response.json();
-      console.log('Registration Response:', { status: response.status, data });
       
       setResponse(`Registration Status: ${response.status}\nResponse: ${JSON.stringify(data, null, 2)}`);
     } catch (error) {

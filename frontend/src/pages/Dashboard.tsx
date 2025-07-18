@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useGame } from '../contexts/GameContext';
 import { useNavigate } from 'react-router-dom';
@@ -14,39 +14,88 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { Game, UserStats } from '../types';
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth();
-  const { getActiveGames, createGame, getUserStats, isLoading } = useGame();
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const { getActiveGames, createGame, getUserStats, isLoading: gameLoading } = useGame();
+  const { joinQueue } = require('../contexts/MatchmakingContext').useMatchmakingContext();
   const navigate = useNavigate();
   const [activeGames, setActiveGames] = useState<Game[]>([]);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const handleRefreshStats = () => {
+    if (isAuthenticated && !authLoading) {
+      loadDashboardData();
+    }
+  };
 
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
+    setStatsError(null);
     try {
       // Load games and stats separately to avoid one failure breaking the other
       const gamesPromise = getActiveGames().catch(error => {
         return { games: [], totalActiveGames: 0 };
       });
-      
-      const statsPromise = getUserStats().catch(error => {
-        return null;
-      });
 
-      const [gamesResponse, stats] = await Promise.all([gamesPromise, statsPromise]);
-      
-      // Handle new API response format - the services now return the data directly
+      let stats: UserStats | null = null;
+      try {
+        const apiStats = await getUserStats();
+        if (
+          apiStats &&
+          apiStats.gamesPlayed === 0 &&
+          apiStats.wins === 0 &&
+          apiStats.losses === 0 &&
+          apiStats.draws === 0 &&
+          apiStats.winRate === 0 &&
+          user?.stats && user.stats.gamesPlayed > 0
+        ) {
+          stats = user.stats;
+        } else {
+          stats = apiStats;
+        }
+      } catch (error: any) {
+        setStatsError(error?.message || 'Failed to load user stats');
+        if (user?.stats && user.stats.gamesPlayed > 0) {
+          stats = user.stats;
+        } else {
+          stats = {
+            level: 0,
+            xp: 0,
+            gamesPlayed: 0,
+            wins: 0,
+            losses: 0,
+            draws: 0,
+            winRate: 0,
+            currentStreak: 0,
+          };
+        }
+      }
+
+      const gamesResponse = await gamesPromise;
       const games = gamesResponse?.games || [];
       setActiveGames(Array.isArray(games) ? games : []);
       setUserStats(stats);
     } catch (error) {
-      // Set default values on error
       setActiveGames([]);
-      setUserStats(null);
+      setUserStats({
+        level: 0,
+        xp: 0,
+        gamesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        winRate: 0,
+        currentStreak: 0,
+      });
+      setStatsError('Failed to load dashboard data');
     }
-  };
+  }, [getActiveGames, getUserStats, user]);
+
+  useEffect(() => {
+    setUserStats(null); // Reset stats on auth change
+    if (isAuthenticated && !authLoading) {
+      loadDashboardData();
+    }
+  }, [isAuthenticated, authLoading, loadDashboardData]);
 
   const handleCreateGame = async () => {
     try {
@@ -63,10 +112,12 @@ const Dashboard: React.FC = () => {
   };
 
   const handleJoinQueue = () => {
-    // TODO: Implement matchmaking
+    // Join matchmaking queue and navigate to matchmaking page
+    joinQueue();
+    navigate('/matchmaking');
   };
 
-  if (isLoading) {
+  if (authLoading || gameLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <LoadingSpinner size="lg" />
@@ -93,8 +144,8 @@ const Dashboard: React.FC = () => {
                 <div className="flex items-center justify-center w-12 h-12 bg-white/20 rounded-full mb-2">
                   <FireIcon className="w-6 h-6" />
                 </div>
-                <p className="text-sm text-primary-100">Energy</p>
-                <p className="text-xl font-bold">{user?.energy || 0}</p>
+                <p className="text-sm text-primary-100">Lives</p>
+                <p className="text-xl font-bold">{user?.lives || 0}</p>
               </div>
             </div>
           </div>
@@ -150,37 +201,47 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Stats Section */}
-      {userStats && (
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-lg font-semibold text-gray-900">Game Statistics</h2>
+          <button
+            className="px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
+            onClick={handleRefreshStats}
+            title="Refresh Stats"
+          >
+            Refresh
+          </button>
+        </div>
+        {statsError && (
+          <div className="text-red-600 text-sm mb-2">{statsError}</div>
+        )}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
           <div className="card text-center">
             <div className="text-2xl lg:text-3xl font-bold text-primary-600 mb-2">
-              {userStats?.gamesPlayed || 0}
+              {userStats?.gamesPlayed ?? 0}
             </div>
             <p className="text-gray-600 text-sm lg:text-base">Games Played</p>
           </div>
-          
           <div className="card text-center">
             <div className="text-2xl lg:text-3xl font-bold text-success-600 mb-2">
-              {userStats?.wins || 0}
+              {userStats?.wins ?? 0}
             </div>
             <p className="text-gray-600 text-sm lg:text-base">Games Won</p>
           </div>
-          
           <div className="card text-center">
             <div className="text-2xl lg:text-3xl font-bold text-warning-600 mb-2">
-              {userStats?.winRate ? `${(userStats.winRate * 100).toFixed(1)}%` : '0%'}
+              {userStats?.winRate ? `${userStats.winRate.toFixed(1)}%` : '0%'}
             </div>
             <p className="text-gray-600 text-sm lg:text-base">Win Rate</p>
           </div>
-          
           <div className="card text-center">
             <div className="text-2xl lg:text-3xl font-bold text-error-600 mb-2">
-              {userStats?.currentStreak || 0}
+              {userStats?.currentStreak ?? 0}
             </div>
             <p className="text-gray-600 text-sm lg:text-base">Current Streak</p>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Active Games */}
       <div className="card">

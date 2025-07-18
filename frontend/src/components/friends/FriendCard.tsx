@@ -30,7 +30,6 @@ export const FriendCard: React.FC<FriendCardProps> = ({
       icon: FaComments,
       onClick: () => {
         // TODO: Implement messaging
-        console.log('Message friend:', friend.id);
       },
     },
     {

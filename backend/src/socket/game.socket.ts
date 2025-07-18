@@ -1,7 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { AuthenticatedSocket, SocketAuthManager } from './auth.socket';
 import { GameLogic, Board, Player, MoveResult } from '../utils/game.utils';
-import { EnergyManager } from '../utils/energy.utils';
+import { LivesManager } from '../utils/lives.utils';
 
 export interface GameRoom {
   id: string;
@@ -675,7 +675,7 @@ export class GameSocket {
       // TODO: Save game to database
       // TODO: Update player stats
       // TODO: Award XP and update levels
-      // TODO: Consume energy
+      // TODO: Consume lives
 
       console.log(`🏁 Game ended in room ${gameRoom.id}: ${endType}`);
       

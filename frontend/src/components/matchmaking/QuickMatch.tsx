@@ -72,15 +72,15 @@ export const QuickMatch: React.FC = () => {
             <h3 className="font-semibold text-gray-900 mb-3">Player Distribution</h3>
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-lg font-semibold text-green-600">{state.stats.skillDistribution.beginner}</div>
+                <div className="text-lg font-semibold text-green-600">{(state.stats.skillDistribution?.beginner ?? 0)}</div>
                 <div className="text-xs text-gray-500">Beginner</div>
               </div>
               <div>
-                <div className="text-lg font-semibold text-blue-600">{state.stats.skillDistribution.intermediate}</div>
+                <div className="text-lg font-semibold text-blue-600">{(state.stats.skillDistribution?.intermediate ?? 0)}</div>
                 <div className="text-xs text-gray-500">Intermediate</div>
               </div>
               <div>
-                <div className="text-lg font-semibold text-purple-600">{state.stats.skillDistribution.advanced}</div>
+                <div className="text-lg font-semibold text-purple-600">{(state.stats.skillDistribution?.advanced ?? 0)}</div>
                 <div className="text-xs text-gray-500">Advanced</div>
               </div>
             </div>

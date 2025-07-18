@@ -29,7 +29,6 @@ export const GameSpectator: React.FC<GameSpectatorProps> = ({
     // Play sound for moves if enabled
     if (soundEnabled && game.moves.length > 0) {
       // You would implement actual sound playing here
-      console.log('Move sound played');
     }
   }, [game.moves.length, soundEnabled]);
 

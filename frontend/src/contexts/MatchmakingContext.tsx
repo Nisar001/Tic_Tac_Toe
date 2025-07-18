@@ -80,6 +80,7 @@ interface MatchmakingProviderProps {
 export const MatchmakingProvider: React.FC<MatchmakingProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(matchmakingReducer, initialState);
   const { socket } = useSocket();
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (socket) {
@@ -127,7 +128,11 @@ export const MatchmakingProvider: React.FC<MatchmakingProviderProps> = ({ childr
     try {
       await matchmakingService.leaveQueue();
       dispatch({ type: 'SET_STATUS', payload: null });
-      
+      // Clear timeout if leaving queue manually
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
       if (socket) {
         socket.emit('matchmaking:leave_queue');
       }

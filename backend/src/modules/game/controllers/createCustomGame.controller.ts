@@ -5,7 +5,7 @@ import { asyncHandler, createError } from '../../../middlewares/error.middleware
 import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
 import { AuthUtils } from '../../../utils/auth.utils';
 import { logInfo, logWarn, logError } from '../../../utils/logger';
-import { EnergyManager } from '../../../utils/energy.utils';
+import { LivesManager } from '../../../utils/energy.utils';
 import Game from '../../../models/game.model';
 import User from '../../../models/user.model';
 
@@ -72,17 +72,17 @@ export const createCustomGame = asyncHandler(async (req: AuthenticatedRequest, r
       throw createError.badRequest(`Invalid game config fields: ${invalidFields.join(', ')}`);
     }
 
-    // Energy validation for game creation
-    const energyStatus = EnergyManager.calculateCurrentEnergy(
-      req.user.energy || 0,
-      req.user.lastEnergyUpdate || new Date(0),
-      req.user.lastEnergyRegenTime
+    // Lives validation for game creation
+    const livesStatus = LivesManager.calculateCurrentLives(
+      req.user.lives || 0,
+      req.user.lastLivesUpdate || new Date(0),
+      req.user.lastLivesRegenTime
     );
 
-    const energyCost = 5; // Cost to create a custom game
-    if (energyStatus.currentEnergy < energyCost) {
-      logWarn(`Game creation attempt with insufficient energy from user: ${req.user.username} (${energyStatus.currentEnergy}/${energyCost}) IP: ${clientIP}`);
-      throw createError.badRequest(`Insufficient energy to create game. Required: ${energyCost}, Available: ${energyStatus.currentEnergy}`);
+    const livesCost = LivesManager.LIVES_PER_GAME || 1; // Cost to create a custom game (default 1)
+    if (livesStatus.currentLives < livesCost) {
+      logWarn(`Game creation attempt with insufficient lives from user: ${req.user.username} (${livesStatus.currentLives}/${livesCost}) IP: ${clientIP}`);
+      throw createError.badRequest(`Insufficient lives to create game. Required: ${livesCost}, Available: ${livesStatus.currentLives}`);
     }
 
     // Check for existing active games by user
@@ -165,15 +165,20 @@ export const createCustomGame = asyncHandler(async (req: AuthenticatedRequest, r
     const randomSuffix = Math.random().toString(36).substring(2, 8);
     const roomId = `custom_${timestamp}_${userId.slice(-6)}_${randomSuffix}`;
 
-    // Deduct energy for game creation
+    // Deduct lives for game creation
+    let updatedUser;
     try {
-      await User.findByIdAndUpdate(userId, {
-        $inc: { energy: -energyCost },
-        $set: { lastEnergyUpdate: new Date() }
-      });
-    } catch (energyError) {
-      logError(`Failed to deduct energy for game creation by user ${userId}: ${energyError}`);
-      throw createError.internal('Failed to process energy cost. Please try again.');
+      updatedUser = await User.findByIdAndUpdate(
+        userId,
+        {
+          $inc: { lives: -livesCost },
+          $set: { lastLivesUpdate: new Date() }
+        },
+        { new: true }
+      );
+    } catch (livesError) {
+      logError(`Failed to deduct lives for game creation by user ${userId}: ${livesError}`);
+      throw createError.internal('Failed to process lives cost. Please try again.');
     }
 
     // Create game with enhanced structure
@@ -208,13 +213,13 @@ export const createCustomGame = asyncHandler(async (req: AuthenticatedRequest, r
     } catch (gameCreateError) {
       logError(`Failed to create game for user ${userId}: ${gameCreateError}`);
       
-      // Refund energy on failure
+      // Refund lives on failure
       try {
         await User.findByIdAndUpdate(userId, {
-          $inc: { energy: energyCost }
+          $inc: { lives: livesCost }
         });
       } catch (refundError) {
-        logError(`Failed to refund energy for user ${userId}: ${refundError}`);
+        logError(`Failed to refund lives for user ${userId}: ${refundError}`);
       }
       
       throw createError.internal('Failed to create game. Please try again.');
@@ -263,8 +268,8 @@ export const createCustomGame = asyncHandler(async (req: AuthenticatedRequest, r
           startedAt: newGame.startedAt,
           creatorId: newGame.creatorId
         },
-        energyUsed: energyCost,
-        remainingEnergy: energyStatus.currentEnergy - energyCost,
+        livesUsed: livesCost,
+        remainingLives: updatedUser?.lives ?? (livesStatus.currentLives - livesCost),
         joinCode: sanitizedConfig.isPrivate ? roomId : null
       }
     });

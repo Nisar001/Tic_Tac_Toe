@@ -1,7 +1,7 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { AuthenticatedSocket, SocketAuthManager } from './auth.socket';
 import { MatchmakingManager, Player, MatchResult } from '../utils/matchmaking.utils';
-import { EnergyManager } from '../utils/energy.utils';
+import { LivesManager } from '../utils/lives.utils';
 
 export class MatchmakingSocket {
   private authManager: SocketAuthManager;
@@ -33,20 +33,20 @@ export class MatchmakingSocket {
       console.log(`🔍 Find match request from ${userId}:`, data);
 
       // Use fallback values for missing user properties
-      const energy = (socket.user as any).energy ?? 5;
-      const lastEnergyUpdate = (socket.user as any).lastEnergyUpdate ?? new Date();
-      const lastEnergyRegenTime = (socket.user as any).lastEnergyRegenTime ?? new Date();
+      const lives = (socket.user as any).lives ?? 5;
+      const lastLivesUpdate = (socket.user as any).lastLivesUpdate ?? new Date();
+      const lastLivesRegenTime = (socket.user as any).lastLivesRegenTime ?? new Date();
 
-      const energyStatus = EnergyManager.calculateCurrentEnergy(
-        energy,
-        lastEnergyUpdate,
-        lastEnergyRegenTime
+      const livesStatus = LivesManager.calculateCurrentLives(
+        lives,
+        lastLivesUpdate,
+        lastLivesRegenTime
       );
 
-      if (!energyStatus.canPlay) {
+      if (!livesStatus.canPlay) {
         socket.emit('match_error', {
-          message: 'Insufficient energy to play',
-          energyStatus
+          message: 'Insufficient lives to play',
+          livesStatus
         });
         return;
       }

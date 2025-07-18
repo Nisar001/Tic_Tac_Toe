@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { asyncHandler, createError } from '../../../middlewares/error.middleware';
 import { AuthUtils } from '../../../utils/auth.utils';
-import { EnergyManager } from '../../../utils/energy.utils';
+import { LivesManager } from '../../../utils/energy.utils';
 import { config } from '../../../config';
 import User from '../../../models/user.model';
 import { logError, logInfo, logWarn } from '../../../utils/logger';
@@ -130,20 +130,20 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       user.lastFailedLogin = undefined;
     }
 
-    // Calculate energy status
-    let energyStatus;
+    // Calculate lives status
+    let livesStatus;
     try {
-      energyStatus = EnergyManager.calculateCurrentEnergy(
-        user.energy ?? 0,
-        user.lastEnergyUpdate ?? user.energyUpdatedAt,
-        user.lastEnergyRegenTime ?? user.energyUpdatedAt
+      livesStatus = LivesManager.calculateCurrentLives(
+        user.lives ?? 0,
+        user.lastLivesUpdate ?? user.livesUpdatedAt,
+        user.lastLivesRegenTime ?? user.livesUpdatedAt
       );
-    } catch (energyError) {
-      logError(`Energy calculation error for user ${user._id}: ${energyError}`);
-      // Use default energy status if calculation fails
-      energyStatus = {
-        currentEnergy: user.energy || 5,
-        maxEnergy: config.ENERGY_CONFIG.MAX_ENERGY,
+    } catch (livesError) {
+      logError(`Lives calculation error for user ${user._id}: ${livesError}`);
+      // Use default lives status if calculation fails
+      livesStatus = {
+        currentLives: user.lives || 15,
+        maxLives: config.LIVES_CONFIG.MAX_LIVES,
         nextRegenTime: null,
         timeUntilNextRegen: 0,
         canPlay: true
@@ -157,11 +157,11 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     user.isOnline = true;
     user.lastSeen = new Date();
 
-    // Update energy if regenerated
-    if (energyStatus.currentEnergy !== user.energy) {
-      user.energy = energyStatus.currentEnergy;
-      user.lastEnergyUpdate = new Date();
-      user.lastEnergyRegenTime = new Date();
+    // Update lives if regenerated
+    if (livesStatus.currentLives !== user.lives) {
+      user.lives = livesStatus.currentLives;
+      user.lastLivesUpdate = new Date();
+      user.lastLivesRegenTime = new Date();
     }
 
     // Generate tokens with enhanced options
@@ -228,8 +228,8 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
           email: user.email,
           level: user.level,
           totalXP: user.totalXP,
-          energy: user.energy,
-          maxEnergy: energyStatus.maxEnergy,
+          lives: user.lives,
+          maxLives: livesStatus.maxLives,
           avatar: user.avatar,
           isEmailVerified: user.isEmailVerified,
           gameStats: user.stats ?? {
@@ -251,7 +251,7 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
         // Legacy support - remove in future versions
         token: accessToken,
         refreshToken: refreshToken,
-        energyStatus,
+        livesStatus,
         sessionInfo: {
           loginTime: new Date(),
           rememberMe: !!rememberMe,

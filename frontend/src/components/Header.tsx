@@ -68,7 +68,7 @@ const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
                   {user?.username}
                 </div>
                 <div className="text-xs text-gray-500">
-                  Energy: {user?.energy || 0}
+                  Lives: {user?.lives || 0}
                 </div>
               </div>
             </div>

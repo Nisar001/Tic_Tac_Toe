@@ -31,7 +31,9 @@ export const gameAPI = {
     apiClient.post<{ data: Game }>(`/game/forfeit/${roomId}`).then(res => res.data?.data),
 
   getUserGameStats: () => 
-    apiClient.get<{ data: UserStats }>('/game/stats').then(res => res.data?.data),
+    apiClient.get<{ data: import('../types').UserGameStatsResponse }>(`/game/stats?ts=${Date.now()}`).then(res => {
+      return res.data?.data || {};
+    }),
 
   getLeaderboard: (page: number = 1, limit: number = 10) => 
     apiClient.get<{ data: LeaderboardResponse }>(`/game/leaderboard?page=${page}&limit=${limit}`).then(res => res.data?.data),

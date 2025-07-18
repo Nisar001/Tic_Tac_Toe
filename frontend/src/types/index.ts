@@ -1,3 +1,15 @@
+// Response type for /game/stats
+export interface UserGameStatsResponse {
+  stats: UserStats;
+  recentGames: Array<{
+    id: string;
+    status: string;
+    result: string;
+    winner: string;
+    createdAt: string;
+    moveCount: number;
+  }>;
+}
 // Basic type definitions
 export type GameStatus = 'waiting' | 'active' | 'completed' | 'abandoned';
 export type GameType = 'classic' | 'blitz' | 'ranked' | 'custom';
@@ -13,11 +25,11 @@ export interface User {
   avatar?: string;
   profilePicture?: string;
   isEmailVerified: boolean;
-  energy: number;
-  maxEnergy: number;
-  energyUpdatedAt?: string;
-  lastEnergyUpdate?: string;
-  lastEnergyRegenTime?: string;
+  lives: number;
+  maxLives: number;
+  livesUpdatedAt?: string;
+  lastLivesUpdate?: string;
+  lastLivesRegenTime?: string;
   level: number;
   xp?: number;
   totalXP: number;
@@ -36,6 +48,8 @@ export interface User {
 }
 
 export interface UserStats {
+  level: number;
+  xp: number;
   gamesPlayed: number;
   wins: number;
   losses: number;
@@ -98,7 +112,7 @@ export interface GamePlayer {
   avatar?: string;
   symbol?: 'X' | 'O';
   isConnected?: boolean;
-  energy?: number;
+  lives?: number;
   joinedAt?: string;
   lastMove?: string;
 }
@@ -192,21 +206,13 @@ export interface LeaderboardEntry {
   badge?: string;
 }
 
+// Generic API response type
 export interface ApiResponse<T = any> {
   success: boolean;
   message?: string;
   data?: T;
   error?: string;
   errors?: any;
-}
-
-export interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
 }
 
 export interface AuthTokens {
@@ -296,24 +302,19 @@ export interface RegisterRequest {
 
 export interface AuthResponse {
   success: boolean;
-  message: string;
+  message?: string;
   data: {
     user: User;
     tokens: {
       accessToken: string;
       refreshToken: string;
-      expiresIn: string;
-      refreshExpiresIn: string;
     };
   };
 }
 
 export interface ProfileResponse {
   success: boolean;
-  message: string;
-  data: {
-    user: User;
-  };
+  user: User;
 }
 
 export interface RegisterResponse {
@@ -327,7 +328,7 @@ export interface RegisterResponse {
       username: string;
       isEmailVerified: boolean;
       level: number;
-      energy: number;
+      lives: number;
     };
     verificationRequired: boolean;
     verificationSent: boolean;

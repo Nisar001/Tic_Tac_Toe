@@ -14,11 +14,11 @@ export interface IUser extends Document {
   level: number;
   xp: number;
   totalXP?: number;
-  energy: number;
-  maxEnergy: number;
-  energyUpdatedAt: Date;
-  lastEnergyUpdate?: Date;
-  lastEnergyRegenTime?: Date;
+  lives: number;
+  maxLives: number;
+  livesUpdatedAt: Date;
+  lastLivesUpdate?: Date;
+  lastLivesRegenTime?: Date;
   lastForfeitTime?: Date | string | null;
   lastLogin?: Date;
   lastLoginMethod?: string;
@@ -64,7 +64,7 @@ export interface IUser extends Document {
   isLocked?: boolean;
   lockedUntil?: Date;
   lastMessageTime?: Date;
-  lastEnergyNotification?: Date;
+  // ...existing code...
   refreshTokens?: Array<{
     token: string;
     createdAt: Date;
@@ -72,12 +72,12 @@ export interface IUser extends Document {
   }>;
   createdAt: Date;
   updatedAt: Date;
-  calculateWinRate(): number;
-  calculateLevel(): number;
-  addXP(xp: number): void;
-  canPlayGame(): boolean;
-  consumeEnergy(): boolean;
-  regenerateEnergy(): void;
+  calculateWinRate?(): number;
+  calculateLevel?(): number;
+  addXP?(xp: number): void;
+  canPlayGame?(): boolean;
+  consumeLives?(): boolean;
+  regenerateLives?(): void;
   sanitizeData(): void;
   validateUserData(): { isValid: boolean; errors: string[] };
 }
@@ -128,11 +128,11 @@ const UserSchema = new Schema<IUser>({
   level: { type: Number, default: 1, min: 1 },
   xp: { type: Number, default: 0, min: 0 },
   totalXP: { type: Number, default: 0, min: 0 },
-  energy: { type: Number, default: 5, min: 0 },
-  maxEnergy: { type: Number, default: 5, min: 1 },
-  energyUpdatedAt: { type: Date, default: Date.now },
-  lastEnergyUpdate: { type: Date },
-  lastEnergyRegenTime: { type: Date },
+  lives: { type: Number, default: 15, min: 0 },
+  maxLives: { type: Number, default: 15, min: 1 },
+  livesUpdatedAt: { type: Date, default: Date.now },
+  lastLivesUpdate: { type: Date },
+  lastLivesRegenTime: { type: Date },
   lastForfeitTime: { type: Date, default: null },
   lastLogin: { type: Date },
   lastLoginMethod: { type: String },
@@ -178,7 +178,7 @@ const UserSchema = new Schema<IUser>({
   isLocked: { type: Boolean, default: false },
   lockedUntil: { type: Date },
   lastMessageTime: { type: Date },
-  lastEnergyNotification: { type: Date },
+  // ...existing code...
   refreshTokens: [{
     token: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
@@ -216,8 +216,12 @@ UserSchema.pre('save', function(next) {
       return next(new Error(`User validation failed: ${validation.errors.join(', ')}`));
     }
     
-    this.stats.winRate = this.calculateWinRate();
-    this.level = this.calculateLevel();
+    if (typeof this.calculateWinRate === 'function') {
+      this.stats.winRate = this.calculateWinRate();
+    }
+    if (typeof this.calculateLevel === 'function') {
+      this.level = this.calculateLevel();
+    }
     next();
   } catch (error) {
     logError(`Pre-save processing error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -289,8 +293,8 @@ UserSchema.methods.addXP = function(xp: number): void {
 
 UserSchema.methods.canPlayGame = function(): boolean {
   try {
-    this.regenerateEnergy();
-    return (this.energy || 0) > 0;
+    this.regenerateLives();
+    return (this.lives || 0) > 0;
   } catch (error) {
     logError(`Can play game check error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return false;
@@ -299,46 +303,21 @@ UserSchema.methods.canPlayGame = function(): boolean {
 
 UserSchema.methods.consumeEnergy = function(): boolean {
   try {
-    this.regenerateEnergy();
-    
-    if ((this.energy || 0) > 0) {
-      this.energy = Math.max(0, (this.energy || 0) - 1);
-      this.energyUpdatedAt = new Date();
+    this.regenerateLives();
+    if ((this.lives || 0) > 0) {
+      this.lives = Math.max(0, (this.lives || 0) - 1);
+      this.livesUpdatedAt = new Date();
       return true;
     }
     return false;
   } catch (error) {
-    logError(`Energy consumption error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    logError(`Lives consumption error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
     return false;
   }
 };
 
 UserSchema.methods.regenerateEnergy = function(): void {
-  try {
-    const now = new Date();
-    const lastUpdate = this.energyUpdatedAt || now;
-    const timeDiff = now.getTime() - lastUpdate.getTime();
-    
-    // Prevent negative time differences
-    if (timeDiff < 0) {
-      logError(`Negative time difference detected for user ${this.email}`);
-      this.energyUpdatedAt = now;
-      return;
-    }
-    
-    const hoursElapsed = timeDiff / (1000 * 60 * 60);
-    const energyToAdd = Math.floor(hoursElapsed / 1.5); // 1 energy per 1.5 hours
-    
-    if (energyToAdd > 0 && (this.energy || 0) < (this.maxEnergy || 5)) {
-      const currentEnergy = Math.max(0, this.energy || 0);
-      const maxEnergy = Math.max(1, this.maxEnergy || 5);
-      
-      this.energy = Math.min(currentEnergy + energyToAdd, maxEnergy);
-      this.energyUpdatedAt = new Date(lastUpdate.getTime() + (energyToAdd * 1.5 * 60 * 60 * 1000));
-    }
-  } catch (error) {
-    logError(`Energy regeneration error for user ${this.email}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-  }
+  // Remove this method, use regenerateLives instead
 };
 
 UserSchema.methods.sanitizeData = function(): void {
@@ -351,8 +330,8 @@ UserSchema.methods.sanitizeData = function(): void {
     // Sanitize numbers
     this.level = Math.max(1, Math.min(100, Math.floor(this.level || 1)));
     this.xp = Math.max(0, Math.floor(this.xp || 0));
-    this.energy = Math.max(0, Math.min(this.maxEnergy || 5, Math.floor(this.energy || 0)));
-    this.maxEnergy = Math.max(1, Math.min(20, Math.floor(this.maxEnergy || 5)));
+    this.lives = Math.max(0, Math.min(this.maxLives || 15, Math.floor(this.lives || 0)));
+    this.maxLives = Math.max(1, Math.min(20, Math.floor(this.maxLives || 15)));
     
     // Sanitize stats
     if (!this.stats) this.stats = { wins: 0, losses: 0, draws: 0, gamesPlayed: 0, winRate: 0 };
@@ -368,8 +347,8 @@ UserSchema.methods.sanitizeData = function(): void {
     if (!Array.isArray(this.friendRequests.received)) this.friendRequests.received = [];
     
     // Sanitize dates
-    if (!this.energyUpdatedAt || !(this.energyUpdatedAt instanceof Date)) {
-      this.energyUpdatedAt = new Date();
+    if (!this.livesUpdatedAt || !(this.livesUpdatedAt instanceof Date)) {
+      this.livesUpdatedAt = new Date();
     }
     if (!this.lastSeen || !(this.lastSeen instanceof Date)) {
       this.lastSeen = new Date();
@@ -420,8 +399,8 @@ UserSchema.methods.validateUserData = function(): { isValid: boolean; errors: st
       errors.push('XP must be a non-negative number');
     }
     
-    if (typeof this.energy !== 'number' || this.energy < 0) {
-      errors.push('Energy must be a non-negative number');
+    if (typeof this.lives !== 'number' || this.lives < 0) {
+      errors.push('Lives must be a non-negative number');
     }
     
     return {

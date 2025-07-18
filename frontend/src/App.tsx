@@ -20,6 +20,7 @@ import VerifyEmail from './pages/auth/VerifyEmail';
 import AuthCallback from './pages/auth/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import GameBoard from './pages/game/GameBoard';
+import Game from './pages/game/Game';
 import { Chat } from './pages/chat/Chat';
 import { Friends } from './pages/friends/Friends';
 import { Matchmaking } from './pages/matchmaking/Matchmaking';
@@ -83,6 +84,13 @@ function App() {
                   </ProtectedRoute>
                 } />
                 
+                <Route path="/game" element={
+                  <ProtectedRoute>
+                    <Layout>
+                      <Game />
+                    </Layout>
+                  </ProtectedRoute>
+                } />
                 <Route path="/game/:roomId" element={
                   <ProtectedRoute>
                     <Layout>

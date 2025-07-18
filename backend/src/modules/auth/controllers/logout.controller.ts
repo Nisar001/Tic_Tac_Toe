@@ -27,12 +27,10 @@ export const logout = asyncHandler(async (req: AuthenticatedRequest, res: Respon
     // Enhanced input validation
     if (!refreshToken || typeof refreshToken !== 'string') {
       logWarn(`Logout attempt without refresh token from IP: ${clientIP}`);
-      throw createError.badRequest('Refresh token is required for logout');
-    }
-
-    if (refreshToken.length < 10) {
+      // Continue without throwing error
+    } else if (refreshToken.length < 10) {
       logWarn(`Logout attempt with invalid refresh token format from IP: ${clientIP}`);
-      throw createError.badRequest('Invalid refresh token format');
+      // Continue without throwing error
     }
 
     // Ensure user is authenticated

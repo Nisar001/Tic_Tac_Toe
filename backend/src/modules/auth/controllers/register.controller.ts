@@ -154,8 +154,10 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
       emailVerificationToken: verificationCode,
       emailVerificationExpiry: verificationExpiry,
-      energy: config.ENERGY_CONFIG?.MAX_ENERGY || 5,
-      lastEnergyUpdate: new Date(),
+      lives: config.LIVES_CONFIG?.MAX_LIVES || 15,
+      maxLives: config.LIVES_CONFIG?.MAX_LIVES || 15,
+      lastLivesUpdate: new Date(),
+      lastLivesRegenTime: new Date(),
       level: 1,
       totalXP: 0,
       registrationIP: clientIP,
@@ -202,7 +204,8 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
           username: user.username,
           isEmailVerified: user.isEmailVerified,
           level: user.level,
-          energy: user.energy
+          lives: user.lives,
+          maxLives: user.maxLives
         },
         verificationRequired: config.FEATURES.EMAIL_VERIFICATION_REQUIRED,
         verificationSent: emailSent

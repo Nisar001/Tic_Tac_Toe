@@ -11,9 +11,9 @@ export interface IUser extends Document {
   providerId?: string;
   level: number;
   xp: number;
-  energy: number;
-  maxEnergy: number;
-  energyUpdatedAt: Date;
+  lives: number;
+  maxLives: number;
+  livesUpdatedAt: Date;
   isOnline: boolean;
   lastSeen: Date;
   friends: mongoose.Types.ObjectId[];
@@ -137,9 +137,13 @@ export interface TwilioSMSData {
 }
 
 export interface EnergySystemConfig {
-  maxEnergy: number;
-  energyRegenTime: number; // in minutes
-  energyPerGame: number;
+  // Deprecated: use LivesSystemConfig
+}
+
+export interface LivesSystemConfig {
+  maxLives: number;
+  livesRegenTime: number; // in minutes
+  livesPerGame: number;
 }
 
 export interface LevelingConfig {

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
 import gameAPI from '../services/game';
 import { useSocket } from './SocketContext';
 import { SOCKET_EVENTS } from '../constants';
@@ -256,18 +257,49 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   };
 
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const getUserStats = async (): Promise<UserStats> => {
+    if (!isAuthenticated || authLoading) {
+      throw new Error('Not authenticated');
+    }
     try {
-      const stats = await gameAPI.getUserGameStats();
-      
-      if (stats) {
-        return stats;
+      const statsResponse = await gameAPI.getUserGameStats();
+      if (statsResponse && typeof statsResponse === 'object') {
+        if ('stats' in statsResponse && statsResponse.stats) {
+          const s = statsResponse.stats as Partial<UserStats>;
+          const isUserStats = (obj: any): obj is UserStats => {
+            return obj &&
+              typeof obj.level === 'number' &&
+              typeof obj.xp === 'number' &&
+              typeof obj.gamesPlayed === 'number' &&
+              typeof obj.wins === 'number' &&
+              typeof obj.losses === 'number' &&
+              typeof obj.draws === 'number' &&
+              typeof obj.winRate === 'number' &&
+              typeof obj.currentStreak === 'number';
+          };
+          if (isUserStats(s)) {
+            return s;
+          }
+        }
+        // Fallback: return default UserStats if missing
+        return {
+          level: 0,
+          xp: 0,
+          gamesPlayed: 0,
+          wins: 0,
+          losses: 0,
+          draws: 0,
+          winRate: 0,
+          currentStreak: 0,
+        };
+        // Do not attempt to cast; only return statsResponse.stats
       }
-      throw new Error('Failed to get user stats');
+      throw new Error('Failed to get user stats: Malformed response');
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Failed to get user stats';
+      const message = error?.response?.data?.message || error?.message || 'Failed to get user stats';
       toast.error(message);
-      throw error;
+      throw new Error(message);
     }
   };
 

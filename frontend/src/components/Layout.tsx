@@ -20,23 +20,22 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, [isAuthenticated, isConnected, connect]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex">
       {/* Sidebar */}
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      
-      {/* Main content wrapper */}
-      <div className="lg:pl-64 min-h-screen">
-        {/* Header */}
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-h-screen lg:pl-64">
+        {/* Header at the top */}
         <Header onMenuClick={() => setSidebarOpen(true)} />
-        
-        {/* Page content */}
-        <main className="px-4 sm:px-6 lg:px-8 py-6">
+        {/* Page content below header */}
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 py-6">
           <div className="max-w-7xl mx-auto">
             {children}
           </div>
         </main>
       </div>
-      
+
       {/* Overlay for mobile sidebar */}
       {sidebarOpen && (
         <div

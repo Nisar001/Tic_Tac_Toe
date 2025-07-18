@@ -21,7 +21,7 @@ import {
 } from '../controllers/matchmaking.controller';
 
 // Import middleware
-import { authenticate, checkEnergy } from '../../../middlewares/auth.middleware';
+import { authenticate, checkLives } from '../../../middlewares/auth.middleware';
 import {
   validateGameMove,
   validateGameId,
@@ -52,7 +52,7 @@ const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextF
 // Game management routes
 router.post('/create',
   gameCreationRateLimit,
-  checkEnergy(1),
+  checkLives(1),
   asyncHandler(createCustomGame)
 );
 
@@ -73,6 +73,7 @@ router.post('/forfeit/:roomId',
 );
 
 router.get('/stats',
+  authenticate,
   asyncHandler(getUserGameStats)
 );
 
@@ -85,7 +86,7 @@ router.get('/leaderboard',
 // Matchmaking routes
 router.post('/matchmaking/join',
   createDynamicRateLimit(10, 60 * 1000), // 10 requests per minute
-  checkEnergy(1),
+  checkLives(1),
   asyncHandler(joinQueue)
 );
 

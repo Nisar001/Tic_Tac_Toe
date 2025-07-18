@@ -65,9 +65,11 @@ const findOrCreateUser = async (profile: any, provider: string): Promise<IUser> 
         logInfo(`Updated existing user provider info for ${provider}`);
       }
     } else {
-      const username = profile.displayName || 
+      let rawUsername = profile.displayName || 
                      (profile.name ? `${profile.name.givenName} ${profile.name.familyName}` : '') ||
                      userEmail.split('@')[0];
+      // Sanitize username: only letters, numbers, underscores
+      const username = rawUsername.replace(/[^a-zA-Z0-9_]/g, '_');
       const avatar = profile.photos?.[0]?.value;
 
       user = new UserModel({
@@ -79,9 +81,10 @@ const findOrCreateUser = async (profile: any, provider: string): Promise<IUser> 
         isEmailVerified: email ? true : false, // Only verify if we have a real email
         level: 1,
         xp: 0,
-        energy: 5,
-        lastEnergyUpdate: new Date(),
-        lastEnergyRegenTime: new Date(),
+        lives: 15,
+        maxLives: 15,
+        lastLivesUpdate: new Date(),
+        lastLivesRegenTime: new Date(),
         createdAt: new Date(),
         lastLogin: new Date(),
       });

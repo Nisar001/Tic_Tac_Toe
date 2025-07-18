@@ -86,6 +86,11 @@ export const config = {
     ENERGY_REGEN_TIME: parseInt(process.env.ENERGY_REGEN_TIME || '90'),
     ENERGY_PER_GAME: parseInt(process.env.ENERGY_PER_GAME || '1')
   },
+  LIVES_CONFIG: {
+    MAX_LIVES: parseInt(process.env.MAX_LIVES || '15'),
+    LIVES_REGEN_TIME: parseInt(process.env.LIVES_REGEN_TIME || '5'), // minutes
+    LIVES_PER_GAME: parseInt(process.env.LIVES_PER_GAME || '1')
+  },
 
   LEVELING_CONFIG: {
     BASE_XP: parseInt(process.env.BASE_XP || '100'),

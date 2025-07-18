@@ -4,7 +4,7 @@ import rateLimit from 'express-rate-limit';
 import { asyncHandler, createError } from '../../../../middlewares/error.middleware';
 import { AuthUtils } from '../../../../utils/auth.utils';
 import { logInfo, logWarn, logError } from '../../../../utils/logger';
-import { EnergyManager } from '../../../../utils/energy.utils';
+import { LivesManager } from '../../../../utils/energy.utils';
 import User from '../../../../models/user.model';
 
 // Enhanced rate limiting for Google authentication
@@ -31,8 +31,8 @@ interface SocialAuthUser {
   isEmailVerified: boolean;
   level: number;
   totalXP: number;
-  energy: number;
-  lastEnergyUpdate?: Date;
+  lives: number;
+  lastLivesUpdate?: Date;
   refreshTokens?: any[];
   isDeleted?: boolean;
   isBlocked?: boolean;
@@ -109,10 +109,10 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response, next
           throw createError.internal('Token generation failed');
         }
 
-        // Calculate current energy
-        const energyStatus = EnergyManager.calculateCurrentEnergy(
-          userDoc.energy || 0,
-          userDoc.lastEnergyUpdate || new Date(0)
+        // Calculate current lives
+        const livesStatus = LivesManager.calculateCurrentLives(
+          userDoc.lives || 0,
+          userDoc.lastLivesUpdate || new Date(0)
         );
 
         // Update user with enhanced data
@@ -120,8 +120,8 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response, next
         userDoc.isOnline = true;
         userDoc.lastLoginMethod = 'google';
         userDoc.lastLoginIP = clientIP;
-        userDoc.energy = energyStatus.currentEnergy;
-        userDoc.lastEnergyUpdate = new Date();
+        userDoc.lives = livesStatus.currentLives;
+        userDoc.lastLivesUpdate = new Date();
 
         // Add refresh token
         if (!Array.isArray(userDoc.refreshTokens)) {
@@ -157,8 +157,8 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response, next
           avatar: userDoc.avatar,
           level: userDoc.level || 1,
           totalXP: userDoc.totalXP || 0,
-          energy: energyStatus.currentEnergy,
-          maxEnergy: energyStatus.maxEnergy,
+          lives: livesStatus.currentLives,
+          maxLives: livesStatus.maxLives,
           provider: user.provider,
           isEmailVerified: userDoc.isEmailVerified
         };
@@ -178,7 +178,7 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response, next
               refreshToken,
               expiresIn: process.env.JWT_EXPIRES_IN || '7d'
             },
-            energyStatus,
+            livesStatus,
             loginMethod: 'google'
           }
         });

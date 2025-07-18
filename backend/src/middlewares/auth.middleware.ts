@@ -149,11 +149,11 @@ export const optionalAuthenticate = async (
   }
 };
 
-export const checkEnergy = (energyRequired: number = 1) => {
+export const checkLives = (livesRequired: number = 1) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
     try {
-      if (typeof energyRequired !== 'number' || isNaN(energyRequired) || energyRequired < 0) {
-        res.status(500).json({ success: false, message: 'Invalid energy requirement configuration' });
+      if (typeof livesRequired !== 'number' || isNaN(livesRequired) || livesRequired < 0) {
+        res.status(500).json({ success: false, message: 'Invalid lives requirement configuration' });
         return;
       }
 
@@ -162,34 +162,34 @@ export const checkEnergy = (energyRequired: number = 1) => {
         return;
       }
 
-      const currentEnergy = req.user.energy;
-      if (typeof currentEnergy !== 'number' || isNaN(currentEnergy)) {
-        res.status(500).json({ success: false, message: 'User energy data is invalid' });
+      const currentLives = req.user.lives;
+      if (typeof currentLives !== 'number' || isNaN(currentLives)) {
+        res.status(500).json({ success: false, message: 'User lives data is invalid' });
         return;
       }
 
       try {
-        req.user.regenerateEnergy?.();
+        req.user.regenerateLives?.();
       } catch (regenError) {
-        logError(`Energy regeneration failed for user ${req.user._id}: ${regenError instanceof Error ? regenError.message : 'Unknown error'}`);
+        logError(`Lives regeneration failed for user ${req.user._id}: ${regenError instanceof Error ? regenError.message : 'Unknown error'}`);
       }
 
-      if (req.user.energy < energyRequired) {
+      if (req.user.lives < livesRequired) {
         res.status(403).json({
           success: false,
-          message: 'Insufficient energy',
-          currentEnergy: req.user.energy,
-          requiredEnergy: energyRequired,
-          nextRegenTime: req.user.energyUpdatedAt
-            ? new Date(req.user.energyUpdatedAt.getTime() + 90 * 60 * 1000)
-            : new Date(Date.now() + 90 * 60 * 1000)
+          message: 'Insufficient lives',
+          currentLives: req.user.lives,
+          requiredLives: livesRequired,
+          nextRegenTime: req.user.livesUpdatedAt
+            ? new Date(req.user.livesUpdatedAt.getTime() + 5 * 60 * 1000)
+            : new Date(Date.now() + 5 * 60 * 1000)
         });
         return;
       }
 
       next();
     } catch (error) {
-      res.status(500).json({ success: false, message: 'Energy validation service error' });
+      res.status(500).json({ success: false, message: 'Lives validation service error' });
     }
   };
 };

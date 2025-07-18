@@ -19,7 +19,7 @@ import {
 import socialRoutes from './social.routes';
 
 // Import middleware
-import { authenticate, optionalAuthenticate, checkEnergy } from '../../../middlewares/auth.middleware';
+import { authenticate, optionalAuthenticate, checkLives } from '../../../middlewares/auth.middleware';
 import {
   validateUserRegistration,
   validateUserLogin,

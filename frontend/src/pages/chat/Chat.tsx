@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useChatContext } from '../../contexts/ChatContext';
 import { ChatRoom } from './ChatRoom';
 import { ChatRoomList } from '../../components/chat/ChatRoomList';
+import CreateChatRoom from '../../components/chat/CreateChatRoom';
 import { FaComments, FaUsers, FaSearch } from 'react-icons/fa';
 
 export const Chat: React.FC = () => {
@@ -36,9 +37,8 @@ export const Chat: React.FC = () => {
               {state.rooms.length}
             </div>
           </div>
-          
           {/* Search */}
-          <div className="relative">
+          <div className="relative mb-2">
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
@@ -48,6 +48,8 @@ export const Chat: React.FC = () => {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          {/* Create Chat Room */}
+          <CreateChatRoom />
         </div>
 
         {/* Room List */}

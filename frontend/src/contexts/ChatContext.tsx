@@ -108,7 +108,8 @@ const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
   }
 };
 
-interface ChatContextType {
+// ...existing code...
+export interface ChatContextType {
   state: ChatState;
   loadRooms: () => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
@@ -116,6 +117,7 @@ interface ChatContextType {
   sendMessage: (roomId: string, content: string) => Promise<void>;
   loadMessages: (roomId: string, page?: number) => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
+  createRoom: (name: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -226,6 +228,16 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_ACTIVE_ROOM', payload: roomId });
   };
 
+  const createRoom = async (name: string) => {
+    try {
+      await chatAPI.createChatRoom({ name });
+      await loadRooms();
+    } catch (error) {
+      dispatch({ type: 'SET_ERROR', payload: 'Failed to create chat room' });
+      throw error;
+    }
+  };
+
   const value: ChatContextType = {
     state,
     loadRooms,
@@ -234,6 +246,7 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     sendMessage,
     loadMessages,
     setActiveRoom,
+    createRoom,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

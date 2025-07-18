@@ -7,7 +7,7 @@ import { asyncHandler, createError } from '../../../middlewares/error.middleware
 import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
 import { AuthUtils } from '../../../utils/auth.utils';
 import { logInfo, logWarn, logError } from '../../../utils/logger';
-import { EnergyManager } from '../../../utils/energy.utils';
+import { LivesManager } from '../../../utils/lives.utils';
 
 // Production-ready rate limiting for game moves
 export const makeMoveRateLimit = rateLimit({
@@ -116,16 +116,16 @@ export const makeMove = asyncHandler(async (req: AuthenticatedRequest, res: Resp
       throw createError.badRequest(`It is not your turn. Current player: ${currentPlayerSymbol}`);
     }
 
-    // Energy validation for moves
-    const energyStatus = EnergyManager.calculateCurrentEnergy(
-      req.user.energy || 0,
-      req.user.lastEnergyUpdate || new Date(0),
-      req.user.lastEnergyRegenTime
+    // Lives validation for moves
+    const livesStatus = LivesManager.calculateCurrentLives(
+      req.user.lives || 0,
+      req.user.lastLivesUpdate || new Date(0),
+      req.user.lastLivesRegenTime
     );
 
-    if (energyStatus.currentEnergy < 1) {
-      logWarn(`Move attempt with insufficient energy from user: ${req.user.username} IP: ${clientIP}`);
-      throw createError.badRequest('Insufficient energy to make a move');
+    if (livesStatus.currentLives < 1) {
+      logWarn(`Move attempt with insufficient lives from user: ${req.user.username} IP: ${clientIP}`);
+      throw createError.badRequest('Insufficient lives to make a move');
     }
 
     // Enhanced position validation
@@ -147,15 +147,15 @@ export const makeMove = asyncHandler(async (req: AuthenticatedRequest, res: Resp
       throw createError.badRequest('Invalid move: position already occupied');
     }
 
-    // Deduct energy for the move
+    // Deduct lives for the move
     try {
       await User.findByIdAndUpdate(userId, {
-        $inc: { energy: -1 },
-        $set: { lastEnergyUpdate: new Date() }
+        $inc: { lives: -1 },
+        $set: { lastLivesUpdate: new Date() }
       });
-    } catch (energyError) {
-      logError(`Failed to deduct energy for user ${userId}: ${energyError}`);
-      // Continue with move - energy deduction failure shouldn't block gameplay
+    } catch (livesError) {
+      logError(`Failed to deduct lives for user ${userId}: ${livesError}`);
+      // Continue with move - lives deduction failure shouldn't block gameplay
     }
 
     // Make the move with transaction safety
@@ -231,7 +231,7 @@ export const makeMove = asyncHandler(async (req: AuthenticatedRequest, res: Resp
                 'stats.gamesWon': 1,
                 'stats.totalGames': 1,
                 'totalXP': 10,
-                'energy': 2 // Bonus energy for winning
+                'lives': 2 // Bonus lives for winning
               }
             }, { session })
           );
@@ -304,8 +304,8 @@ export const makeMove = asyncHandler(async (req: AuthenticatedRequest, res: Resp
             timestamp: new Date()
           },
           player: {
-            energy: energyStatus.currentEnergy - 1,
-            maxEnergy: energyStatus.maxEnergy
+            lives: livesStatus.currentLives - 1,
+            maxLives: livesStatus.maxLives
           }
         }
       });

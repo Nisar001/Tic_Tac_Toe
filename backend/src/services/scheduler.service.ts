@@ -1,7 +1,7 @@
 import cron from 'node-cron';
 import User from '../models/user.model';
 import Game from '../models/game.model';
-import { EnergyManager } from '../utils/energy.utils';
+import { LivesManager } from '../utils/lives.utils';
 import { EmailService } from './email.service';
 import { SMSService } from './sms.service';
 
@@ -16,7 +16,7 @@ export interface JobStats {
 }
 
 export class SchedulerService {
-  private static energyRegenJob: cron.ScheduledTask | null = null;
+  private static livesRegenJob: cron.ScheduledTask | null = null;
   private static cleanupJob: cron.ScheduledTask | null = null;
   private static statsJob: cron.ScheduledTask | null = null;
   private static notificationJob: cron.ScheduledTask | null = null;
@@ -33,7 +33,7 @@ export class SchedulerService {
 
     try {
       this.initializeJobStats();
-      this.startEnergyRegeneration();
+      this.startLivesRegeneration();
       this.startDatabaseCleanup();
       this.startStatsCalculation();
       this.startNotificationSystem();
@@ -49,7 +49,7 @@ export class SchedulerService {
 
   private static initializeJobStats(): void {
     const jobs = [
-      'energyRegeneration',
+      'livesRegeneration',
       'databaseCleanup',
       'statsCalculation',
       'notifications',
@@ -101,7 +101,7 @@ export class SchedulerService {
 
   static shutdown(): void {
     const jobs = [
-      { job: this.energyRegenJob, name: 'Energy Regeneration' },
+      { job: this.livesRegenJob, name: 'Lives Regeneration' },
       { job: this.cleanupJob, name: 'Database Cleanup' },
       { job: this.statsJob, name: 'Stats Calculation' },
       { job: this.notificationJob, name: 'Notifications' },
@@ -115,7 +115,7 @@ export class SchedulerService {
       }
     });
 
-    this.energyRegenJob = null;
+    this.livesRegenJob = null;
     this.cleanupJob = null;
     this.statsJob = null;
     this.notificationJob = null;
@@ -125,14 +125,14 @@ export class SchedulerService {
     console.log('📅 Enhanced Scheduler service stopped');
   }
 
-  private static startEnergyRegeneration(): void {
-    this.energyRegenJob = cron.schedule('* * * * *', async () => {
-      await this.executeJobWithMonitoring('energyRegeneration', () => this.processEnergyRegeneration());
+  private static startLivesRegeneration(): void {
+    this.livesRegenJob = cron.schedule('* * * * *', async () => {
+      await this.executeJobWithMonitoring('livesRegeneration', () => this.processLivesRegeneration());
     }, {
       scheduled: true,
       timezone: "UTC"
     });
-    console.log('⚡ Energy regeneration job started');
+    console.log('❤️ Lives regeneration job started');
   }
 
   private static startDatabaseCleanup(): void {
@@ -169,35 +169,36 @@ export class SchedulerService {
     console.log('🔒 Security monitoring job started');
   }
 
-  private static async processEnergyRegeneration(): Promise<void> {
+  private static async processLivesRegeneration(): Promise<void> {
     const now = new Date();
-    const energyConfig = EnergyManager.getEnergyConfig();
+    const maxLives = 5;
+    const livesRegenInterval = 30 * 60 * 1000; // 30 minutes
 
     const usersNeedingRegen = await User.find({
-      energy: { $lt: energyConfig.maxEnergy },
+      lives: { $lt: maxLives },
       $or: [
-        { lastEnergyRegenTime: { $exists: false } },
-        { lastEnergyRegenTime: { $lte: new Date(now.getTime() - energyConfig.energyRegenTime) } }
+        { lastLivesRegenTime: { $exists: false } },
+        { lastLivesRegenTime: { $lte: new Date(now.getTime() - livesRegenInterval) } }
       ]
     });
 
     let updatedCount = 0;
-    const notificationsToSend: Array<{ userId: string; email: string; energy: number }> = [];
+    const notificationsToSend: Array<{ userId: string; email: string; lives: number }> = [];
 
     for (const user of usersNeedingRegen) {
-      const energyStatus = EnergyManager.calculateCurrentEnergy(user.energy, user.energyUpdatedAt, user.energyUpdatedAt);
+      const livesStatus = LivesManager.calculateCurrentLives(user.lives, user.lastLivesUpdate, user.lastLivesRegenTime);
 
-      if (energyStatus.currentEnergy > user.energy) {
-        user.energy = energyStatus.currentEnergy;
-        user.energyUpdatedAt = now;
+      if (livesStatus.currentLives > user.lives) {
+        user.lives = livesStatus.currentLives;
+        user.lastLivesUpdate = now;
         await user.save();
         updatedCount++;
 
-        if (user.energy < energyConfig.energyPerGame && energyStatus.currentEnergy >= energyConfig.energyPerGame) {
+        if (user.lives < 1 && livesStatus.currentLives >= 1) {
           notificationsToSend.push({
             userId: String(user._id),
             email: user.email,
-            energy: energyStatus.currentEnergy
+            lives: livesStatus.currentLives
           });
         }
       }
@@ -205,35 +206,35 @@ export class SchedulerService {
 
     // Send notifications with error handling
     try {
-      await this.sendEnergyNotifications(notificationsToSend);
+      await this.sendLivesNotifications(notificationsToSend);
     } catch (error) {
-      console.error('Failed to send energy notifications:', error);
+      console.error('Failed to send lives notifications:', error);
     }
 
     if (updatedCount > 0) {
-      console.log(`⚡ Regenerated energy for ${updatedCount} users`);
+      console.log(`❤️ Regenerated lives for ${updatedCount} users`);
     }
   }
 
-  private static async sendEnergyNotifications(notifications: Array<{ userId: string; email: string; energy: number }>): Promise<void> {
+  private static async sendLivesNotifications(notifications: Array<{ userId: string; email: string; lives: number }>): Promise<void> {
     for (const notification of notifications) {
       try {
         await EmailService.sendEmail({
           to: notification.email,
-          subject: '⚡ Energy Recharged - Ready to Play!',
+          subject: '❤️ Lives Recharged - Ready to Play!',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <h2 style="color: #667eea;">🎮 Tic Tac Toe Game</h2>
-              <p>Great news! Your energy has been recharged.</p>
-              <p><strong>Current Energy: ${notification.energy}/5</strong></p>
+              <p>Great news! Your lives have been recharged.</p>
+              <p><strong>Current Lives: ${notification.lives}/5</strong></p>
               <p>You're ready to play again! Join a match now.</p>
               <a href="${process.env.FRONTEND_URL || 'https://your-default-frontend.com'}/lobby" style="background: #667eea; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Play Now</a>
             </div>
           `,
-          text: `Your energy has been recharged! Current Energy: ${notification.energy}/5. Ready to play again!`
+          text: `Your lives have been recharged! Current Lives: ${notification.lives}/5. Ready to play again!`
         });
       } catch (error) {
-        console.error(`Failed to send energy notification to ${notification.email}:`, error);
+        console.error(`Failed to send lives notification to ${notification.email}:`, error);
       }
     }
   }
@@ -269,21 +270,21 @@ export class SchedulerService {
   }
 
   private static async processNotifications(): Promise<void> {
-    const usersWithFullEnergy = await User.find({
-      energy: { $gte: 100 },
-      lastEnergyNotification: { $lt: new Date(Date.now() - 30 * 60 * 1000) }
-    }).select('_id email username energy');
+    const usersWithFullLives = await User.find({
+      lives: { $gte: 5 },
+      lastLivesNotification: { $lt: new Date(Date.now() - 30 * 60 * 1000) }
+    }).select('_id email username lives');
 
-    for (const user of usersWithFullEnergy) {
+    for (const user of usersWithFullLives) {
       try {
-        console.log(`Sending energy notification to user ${user.username}`);
-        await User.findByIdAndUpdate(user._id, { lastEnergyNotification: new Date() });
+        console.log(`Sending lives notification to user ${user.username}`);
+        await User.findByIdAndUpdate(user._id, { lastLivesNotification: new Date() });
       } catch (notificationError) {
         console.error(`Failed to send notification to user ${user._id}:`, notificationError);
       }
     }
 
-    console.log(`Processed notifications for ${usersWithFullEnergy.length} users`);
+    console.log(`Processed notifications for ${usersWithFullLives.length} users`);
   }
 
   private static async performSecurityCheck(): Promise<void> {
@@ -312,37 +313,37 @@ export class SchedulerService {
     console.log('Security monitoring completed');
   }
 
-  static async regenerateUserEnergy(userId: string): Promise<boolean> {
+  static async regenerateUserLives(userId: string): Promise<boolean> {
     try {
       const user = await User.findById(userId);
       if (!user) return false;
 
-      const energyStatus = EnergyManager.calculateCurrentEnergy(user.energy, user.energyUpdatedAt, user.energyUpdatedAt);
+      const livesStatus = LivesManager.calculateCurrentLives(user.lives, user.lastLivesUpdate, user.lastLivesRegenTime);
 
-      if (energyStatus.currentEnergy > user.energy) {
-        user.energy = energyStatus.currentEnergy;
-        user.energyUpdatedAt = new Date();
+      if (livesStatus.currentLives > user.lives) {
+        user.lives = livesStatus.currentLives;
+        user.lastLivesUpdate = new Date();
         await user.save();
         return true;
       }
 
       return false;
     } catch (error) {
-      console.error('Manual energy regeneration failed:', error);
+      console.error('Manual lives regeneration failed:', error);
       return false;
     }
   }
 
-  static getStatus(): { energyRegenActive: boolean; cleanupActive: boolean; statsActive: boolean } {
+  static getStatus(): { livesRegenActive: boolean; cleanupActive: boolean; statsActive: boolean } {
     return {
-      energyRegenActive: this.energyRegenJob !== null,
+      livesRegenActive: this.livesRegenJob !== null,
       cleanupActive: this.cleanupJob !== null,
       statsActive: this.statsJob !== null
     };
   }
 
-  static async forceEnergyRegeneration(): Promise<void> {
-    await this.processEnergyRegeneration();
+  static async forceLivesRegeneration(): Promise<void> {
+    await this.processLivesRegeneration();
   }
 
   static async forceDatabaseCleanup(): Promise<void> {

@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { asyncHandler, createError } from '../../../middlewares/error.middleware';
 import { AuthenticatedRequest } from '../../../middlewares/auth.middleware';
-import { EnergyManager } from '../../../utils/energy.utils';
+import { LivesManager } from '../../../utils/energy.utils';
 import { AuthUtils } from '../../../utils/auth.utils';
 
 export const getProfile = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
@@ -9,33 +9,38 @@ export const getProfile = asyncHandler(async (req: AuthenticatedRequest, res: Re
     throw createError.unauthorized('Authentication required');
   }
 
-  // Safely calculate energy and XP progress
-  const energyStatus = EnergyManager.calculateCurrentEnergy(
-    req.user.energy ?? 0,
-    req.user.lastEnergyUpdate ?? new Date(0),
-    req.user.lastEnergyRegenTime
+  // Always fetch the latest user document from DB
+  const user = await require('../../../models/user.model').default.findById(req.user._id);
+  if (!user) {
+    throw createError.notFound('User not found');
+  }
+
+  // Safely calculate lives and XP progress
+  const livesStatus = LivesManager.calculateCurrentLives(
+    user.lives ?? 0,
+    user.lastLivesUpdate ?? new Date(0),
+    user.lastLivesRegenTime
   );
 
-  const xpProgress = AuthUtils.getXPProgress(req.user.totalXP ?? 0);
+  const xpProgress = AuthUtils.getXPProgress(user.totalXP ?? 0);
 
   const userProfile = {
-    _id: req.user._id,
-    id: req.user._id,
-    username: req.user.username,
-    email: req.user.email,
-    avatar: req.user.avatar,
-    bio: req.user.bio,
-    level: req.user.level,
-    totalXP: req.user.totalXP,
+    _id: user._id,
+    id: user._id,
+    username: user.username,
+    email: user.email,
+    avatar: user.avatar,
+    bio: user.bio,
+    level: user.level,
+    totalXP: user.totalXP,
     xpProgress,
-    energy: energyStatus.currentEnergy,
-    maxEnergy: energyStatus.maxEnergy,
-    energyStatus,
-    gameStats: req.user.stats ?? {},
-    stats: req.user.stats ?? {},
-    isEmailVerified: req.user.isEmailVerified,
-    createdAt: req.user.createdAt,
-    lastLogin: req.user.lastLogin
+    lives: livesStatus.currentLives,
+    maxLives: livesStatus.maxLives,
+    livesStatus,
+    stats: user.stats ?? {},
+    isEmailVerified: user.isEmailVerified,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin
   };
 
   res.status(200).json({

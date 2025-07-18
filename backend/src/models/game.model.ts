@@ -49,7 +49,7 @@ const GameSchema = new Schema<IGame>({
   },
   players: {
     player1: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-    player2: { type: Schema.Types.ObjectId, ref: 'User', required: true }
+    player2: { type: Schema.Types.ObjectId, ref: 'User', required: false, default: null }
   },
   board: {
     type: [[String]],
@@ -381,16 +381,16 @@ GameSchema.methods.validateGameState = function(): { isValid: boolean; errors: s
     }
     
     // Validate players
-    if (!this.players || !this.players.player1 || !this.players.player2) {
-      errors.push('Both players are required');
+    if (!this.players || !this.players.player1) {
+      errors.push('Player1 is required');
     } else {
       if (!mongoose.Types.ObjectId.isValid(this.players.player1)) {
         errors.push('Player1 must be a valid ObjectId');
       }
-      if (!mongoose.Types.ObjectId.isValid(this.players.player2)) {
-        errors.push('Player2 must be a valid ObjectId');
+      if (this.players.player2 && !mongoose.Types.ObjectId.isValid(this.players.player2)) {
+        errors.push('Player2 must be a valid ObjectId if present');
       }
-      if (this.players.player1.toString() === this.players.player2.toString()) {
+      if (this.players.player2 && this.players.player1.toString() === this.players.player2.toString()) {
         errors.push('Players must be different');
       }
     }

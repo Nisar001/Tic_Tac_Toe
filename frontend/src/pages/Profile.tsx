@@ -58,7 +58,7 @@ const passwordSchema = yup.object({
 });
 
 const Profile: React.FC = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, isAuthenticated, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<'profile' | 'password' | 'stats'>('profile');
   const [profileLoading, setProfileLoading] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
@@ -138,7 +138,7 @@ const Profile: React.FC = () => {
     }
   };
 
-  if (!user) {
+  if (!isAuthenticated || isLoading || !user) {
     return (
       <div className="space-y-8">
         <div className="card">
@@ -205,7 +205,7 @@ const Profile: React.FC = () => {
               </span>
               <span className="flex items-center">
                 <HeartIcon className="w-4 h-4 mr-1" />
-                {user.energy}/{user.maxEnergy} Energy
+                {user.lives}/{user.maxLives} Lives
               </span>
             </div>
           </div>
@@ -446,71 +446,90 @@ const Profile: React.FC = () => {
       {activeTab === 'stats' && (
         <div className="card">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Game Statistics</h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <TrophyIcon className="h-8 w-8 text-blue-600" />
+          {(() => {
+            const stats = user.stats || {};
+            // Fallbacks for missing fields
+            const gamesPlayed = typeof stats.gamesPlayed === 'number' ? stats.gamesPlayed : 0;
+            const wins = typeof stats.wins === 'number' ? stats.wins : 0;
+            const losses = typeof stats.losses === 'number' ? stats.losses : 0;
+            const draws = typeof stats.draws === 'number' ? stats.draws : 0;
+            const winRate = typeof stats.winRate === 'number' ? stats.winRate : 0;
+            const currentStreak = typeof stats.currentStreak === 'number' ? stats.currentStreak : 0;
+            const level = typeof stats.level === 'number' ? stats.level : (typeof user.level === 'number' ? user.level : 0);
+            const xp = typeof stats.xp === 'number' ? stats.xp : 0;
+            return (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <TrophyIcon className="h-8 w-8 text-blue-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-blue-600">Games Played</p>
+                        <p className="text-2xl font-bold text-blue-900">{gamesPlayed}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <FireIcon className="h-8 w-8 text-green-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-green-600">Wins</p>
+                        <p className="text-2xl font-bold text-green-900">{wins}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <StarIcon className="h-8 w-8 text-yellow-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-yellow-600">Win Rate</p>
+                        <p className="text-2xl font-bold text-yellow-900">{winRate.toFixed(1)}%</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg">
+                    <div className="flex items-center">
+                      <div className="flex-shrink-0">
+                        <HeartIcon className="h-8 w-8 text-purple-600" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-sm font-medium text-purple-600">Current Streak</p>
+                        <p className="text-2xl font-bold text-purple-900">{currentStreak}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-blue-600">Games Played</p>
-                  <p className="text-2xl font-bold text-blue-900">{user.stats.gamesPlayed}</p>
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-gray-900">{wins}</p>
+                    <p className="text-sm text-gray-600">Wins</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-gray-900">{losses}</p>
+                    <p className="text-sm text-gray-600">Losses</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-3xl font-bold text-gray-900">{draws}</p>
+                    <p className="text-sm text-gray-600">Draws</p>
+                  </div>
                 </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-green-50 to-green-100 p-6 rounded-lg">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <FireIcon className="h-8 w-8 text-green-600" />
+                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-gray-900">Level: {level}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-xl font-bold text-gray-900">XP: {xp}</p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-green-600">Wins</p>
-                  <p className="text-2xl font-bold text-green-900">{user.stats.wins}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-yellow-50 to-yellow-100 p-6 rounded-lg">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <StarIcon className="h-8 w-8 text-yellow-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-yellow-600">Win Rate</p>
-                  <p className="text-2xl font-bold text-yellow-900">{user.stats.winRate.toFixed(1)}%</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-50 to-purple-100 p-6 rounded-lg">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <HeartIcon className="h-8 w-8 text-purple-600" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-purple-600">Current Streak</p>
-                  <p className="text-2xl font-bold text-purple-900">{user.stats.currentStreak || 0}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="text-center">
-              <p className="text-3xl font-bold text-gray-900">{user.stats.wins}</p>
-              <p className="text-sm text-gray-600">Wins</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-gray-900">{user.stats.losses}</p>
-              <p className="text-sm text-gray-600">Losses</p>
-            </div>
-            <div className="text-center">
-              <p className="text-3xl font-bold text-gray-900">{user.stats.draws}</p>
-              <p className="text-sm text-gray-600">Draws</p>
-            </div>
-          </div>
+              </>
+            );
+          })()}
         </div>
       )}
     </div>

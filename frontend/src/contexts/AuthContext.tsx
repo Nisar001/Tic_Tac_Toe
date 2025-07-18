@@ -96,38 +96,59 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       };
 
       if (storedUser && storedTokens.accessToken) {
-        // Set loading state
         dispatch({ type: 'SET_LOADING', payload: true });
-        
+        let profileResponse;
         try {
-          // Verify token by fetching fresh user profile
-          const response = await authAPI.getProfile();
-          if (response && response.success && response.data && response.data.success) {
-            const user = response.data.data.user;
-            // Only set user and tokens if verification succeeds
-            dispatch({ type: 'SET_USER', payload: user });
-            dispatch({
-              type: 'SET_TOKENS',
-              payload: {
-                accessToken: storedTokens.accessToken,
-                refreshToken: storedTokens.refreshToken || '',
-                expiresIn: 3600,
-              },
-            });
+          profileResponse = await authAPI.getProfile();
+        } catch (error: any) {
+          // If token expired, try to refresh
+          if (error.response?.status === 401 && storedTokens.refreshToken) {
+            try {
+              const refreshResponse = await authAPI.refreshToken();
+              if (
+                refreshResponse &&
+                refreshResponse.success &&
+                refreshResponse.data &&
+                refreshResponse.data.data &&
+                refreshResponse.data.data.tokens
+              ) {
+                const { accessToken, refreshToken } = refreshResponse.data.data.tokens;
+                localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+                if (refreshToken) {
+                  localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+                }
+                // Retry profile fetch with new token
+                profileResponse = await authAPI.getProfile();
+              } else {
+                clearAuth();
+                dispatch({ type: 'SET_LOADING', payload: false });
+                return;
+              }
+            } catch (refreshError) {
+              clearAuth();
+              dispatch({ type: 'SET_LOADING', payload: false });
+              return;
+            }
           } else {
-            console.warn('Profile verification returned null user');
             clearAuth();
-          }
-        } catch (error) {
-          console.error('Token verification failed:', error);
-          // Check if it's a network error vs auth error
-          if (error instanceof Error && error.message.includes('Network Error')) {
-            // Network issue - keep tokens but show as not authenticated until network recovers
             dispatch({ type: 'SET_LOADING', payload: false });
-          } else {
-            // Auth error - clear everything
-            clearAuth();
+            return;
           }
+        }
+        // Set user and tokens if profile fetch succeeded
+        if (profileResponse && profileResponse.success && profileResponse.data && profileResponse.data.user) {
+          const user = profileResponse.data.user;
+          dispatch({ type: 'SET_USER', payload: user });
+          dispatch({
+            type: 'SET_TOKENS',
+            payload: {
+              accessToken: localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN) || '',
+              refreshToken: localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN) || '',
+              expiresIn: 3600,
+            },
+          });
+        } else {
+          clearAuth();
         }
       } else {
         dispatch({ type: 'SET_LOADING', payload: false });
@@ -276,8 +297,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const refreshUser = async () => {
     try {
       const response = await authAPI.getProfile();
-      if (response && response.success && response.data && response.data.success) {
-        const user = response.data.data.user;
+      // The backend returns { success, message, data: { user: ... } }
+      const user = response?.data?.user;
+      if (user && user._id) {
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
         dispatch({ type: 'SET_USER', payload: user });
       } else {
@@ -294,7 +316,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       const response = await authAPI.updateProfile(data);
       if (response && response.success && response.data && response.data.success) {
-        const user = response.data.data.user;
+        const user = response.data.user;
         localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
         dispatch({ type: 'UPDATE_USER', payload: user });
         toast.success('Profile updated successfully!');
