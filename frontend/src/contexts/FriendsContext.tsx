@@ -101,7 +101,7 @@ interface FriendsContextType {
   state: FriendsState;
   loadFriends: () => Promise<void>;
   loadFriendRequests: () => Promise<void>;
-  sendFriendRequest: (data: { receiverEmail?: string; receiverUsername?: string; message?: string }) => Promise<void>;
+  sendFriendRequest: (data: { receiverId: string; message?: string }) => Promise<void>;
   acceptFriendRequest: (requestId: string) => Promise<void>;
   rejectFriendRequest: (requestId: string) => Promise<void>;
   removeFriend: (friendId: string) => Promise<void>;
@@ -162,18 +162,21 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
     }
   }, [socket]);
 
+  // Load friends from new modular endpoint
   const loadFriends = async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const users = await friendsAPI.getFriends();
       if (users && Array.isArray(users)) {
-        // Transform User[] to Friend[] 
-        const friends: Friend[] = users.map(user => ({
-          id: user.id || user._id,
-          user: user,
-          friendSince: user.createdAt || new Date().toISOString(),
-          status: 'offline' as const,
-        }));
+        const friends: Friend[] = users.map(user => {
+          const mappedUser = { ...user, id: user.id || user._id };
+          return {
+            id: mappedUser.id,
+            user: mappedUser,
+            friendSince: mappedUser.createdAt || new Date().toISOString(),
+            status: 'offline' as const,
+          };
+        });
         dispatch({ type: 'SET_FRIENDS', payload: friends });
       }
     } catch (error) {
@@ -181,21 +184,33 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
     }
   };
 
+  // Load friend requests from new modular endpoint
   const loadFriendRequests = async () => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const requests = await friendsAPI.getFriendRequests();
-      dispatch({ type: 'SET_FRIEND_REQUESTS', payload: requests });
+      const mapReq = (req: any) => ({
+        ...req,
+        id: req.id || req._id,
+        sender: req.sender ? { ...req.sender, id: req.sender.id || req.sender._id } : req.sender,
+        recipient: req.recipient ? { ...req.recipient, id: req.recipient.id || req.recipient._id } : req.recipient,
+      });
+      dispatch({
+        type: 'SET_FRIEND_REQUESTS',
+        payload: {
+          sent: (requests.sent || []).map(mapReq),
+          received: (requests.received || []).map(mapReq),
+        },
+      });
     } catch (error) {
       dispatch({ type: 'SET_ERROR', payload: 'Failed to load friend requests' });
     }
   };
 
-  const sendFriendRequest = async (data: { receiverEmail?: string; receiverUsername?: string; message?: string }) => {
+  // Send friend request using new endpoint (receiverId)
+  const sendFriendRequest = async (data: { receiverId: string; message?: string }) => {
     try {
-      const request = await friendsAPI.sendFriendRequest({ 
-        username: data.receiverUsername || data.receiverEmail || '' 
-      });
+      const request = await friendsAPI.sendFriendRequest({ receiverId: data.receiverId, message: data.message });
       if (request) {
         dispatch({ type: 'ADD_FRIEND_REQUEST', payload: { type: 'sent', request } });
       }
@@ -204,6 +219,7 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
     }
   };
 
+  // Accept friend request using new endpoint
   const acceptFriendRequest = async (requestId: string) => {
     try {
       await friendsAPI.acceptFriendRequest(requestId);
@@ -214,6 +230,7 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
     }
   };
 
+  // Reject friend request using new endpoint
   const rejectFriendRequest = async (requestId: string) => {
     try {
       await friendsAPI.rejectFriendRequest(requestId);
@@ -223,6 +240,7 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
     }
   };
 
+  // Remove friend using new endpoint
   const removeFriend = async (friendId: string) => {
     try {
       await friendsAPI.removeFriend(friendId);
@@ -232,6 +250,7 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
     }
   };
 
+  // Search users using new endpoint
   const searchUsers = async (query: string) => {
     try {
       const users = await friendsAPI.searchUsers(query);

@@ -432,7 +432,8 @@ export interface FriendRequest {
 }
 
 export interface SendFriendRequestRequest {
-  username: string;
+  receiverId: string;
+  message?: string;
 }
 
 // Leaderboard Types

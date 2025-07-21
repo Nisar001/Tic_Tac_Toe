@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FaUserPlus, FaSearch, FaEnvelope, FaUser } from 'react-icons/fa';
 
@@ -10,6 +10,26 @@ export const AddFriend: React.FC = () => {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isSending, setIsSending] = useState(false);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [allUsersError, setAllUsersError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!searchQuery) {
+      setLoadingAll(true);
+      setAllUsersError(null);
+      import('../../services/friends').then(({ friendsAPI }) => {
+        friendsAPI.getFriends().then((users: any[]) => {
+          setAllUsers(users || []);
+          setLoadingAll(false);
+        }).catch((err: any) => {
+          setAllUsers([]);
+          setAllUsersError('Failed to load users. Please try again.');
+          setLoadingAll(false);
+        });
+      });
+    }
+  }, [searchQuery]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -30,11 +50,9 @@ export const AddFriend: React.FC = () => {
     setIsSending(true);
     try {
       await sendFriendRequest({
-        [searchType === 'email' ? 'receiverEmail' : 'receiverUsername']: 
-          searchType === 'email' ? user.email : user.username,
+        receiverId: user.id || user._id,
         message: message.trim() || undefined,
       });
-      
       // Clear form
       setSearchQuery('');
       setMessage('');
@@ -120,12 +138,12 @@ export const AddFriend: React.FC = () => {
         </div>
 
         {/* Search Results */}
-        {searchResults.length > 0 && (
+        {searchQuery && searchResults.length > 0 && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-900">Search Results</h3>
             {searchResults.map((user) => (
               <div
-                key={user.id}
+                key={user.id || user._id}
                 className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
               >
                 <div className="flex items-center space-x-4">
@@ -134,7 +152,7 @@ export const AddFriend: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="font-semibold text-gray-900">{user.username}</h4>
-                    <p className="text-sm text-gray-500">{user.email}</p>
+                    {user.email && <p className="text-sm text-gray-500">{user.email}</p>}
                   </div>
                 </div>
                 <button
@@ -150,9 +168,56 @@ export const AddFriend: React.FC = () => {
           </div>
         )}
 
-        {searchResults.length === 0 && searchQuery && !isSearching && (
+        {/* Show all users as suggestions if no search query */}
+        {!searchQuery && !loadingAll && !allUsersError && allUsers.length > 0 && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">Suggested Users</h3>
+            {allUsers.map((user) => (
+              <div
+                key={user.id || user._id}
+                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg"
+              >
+                <div className="flex items-center space-x-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
+                    {user.username.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{user.username}</h4>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleSendRequest(user)}
+                  disabled={isSending}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center space-x-2"
+                >
+                  <FaUserPlus className="w-4 h-4" />
+                  <span>{isSending ? 'Sending...' : 'Add Friend'}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Error state for loading all users */}
+        {!searchQuery && allUsersError && !loadingAll && (
+          <div className="text-center py-8">
+            <p className="text-red-500">{allUsersError}</p>
+          </div>
+        )}
+        {/* Empty state for no suggested users */}
+        {!searchQuery && !loadingAll && !allUsersError && allUsers.length === 0 && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">No users to suggest.</p>
+          </div>
+        )}
+
+        {searchQuery && searchResults.length === 0 && !isSearching && (
           <div className="text-center py-8">
             <p className="text-gray-500">No users found matching your search.</p>
+          </div>
+        )}
+        {!searchQuery && loadingAll && (
+          <div className="text-center py-8">
+            <p className="text-gray-500">Loading users...</p>
           </div>
         )}
       </div>

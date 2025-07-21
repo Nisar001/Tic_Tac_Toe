@@ -18,7 +18,7 @@
     "paths": {
       "*": ["src/*"]
     },
-    "types": []
+    "types": ["node"]
   },
   "include": ["src", "tests", "types"],
   "exclude": ["node_modules", "dist"]

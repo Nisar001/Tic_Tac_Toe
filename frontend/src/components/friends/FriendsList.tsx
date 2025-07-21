@@ -1,10 +1,31 @@
-import React from 'react';
+
+import React, { useEffect, useState } from 'react';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FriendCard } from './FriendCard';
 import { FaUsers, FaGamepad } from 'react-icons/fa';
+import friendsAPI from '../../services/friends';
 
 export const FriendsList: React.FC = () => {
   const { state } = useFriendsContext();
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (state.friends.length === 0) {
+      setLoadingAll(true);
+      setError(null);
+      friendsAPI.getFriends()
+        .then((users: any[]) => {
+          setAllUsers(users || []);
+          setLoadingAll(false);
+        })
+        .catch((err: any) => {
+          setError('Failed to load suggested users.');
+          setLoadingAll(false);
+        });
+    }
+  }, [state.friends.length]);
 
   if (state.friends.length === 0) {
     return (
@@ -13,9 +34,31 @@ export const FriendsList: React.FC = () => {
         <h3 className="text-xl font-semibold text-gray-600 mb-2">
           No Friends Yet
         </h3>
-        <p className="text-gray-500">
+        <p className="text-gray-500 mb-4">
           Add some friends to start playing together!
         </p>
+        {error && (
+          <div className="text-red-500 mb-2">{error}</div>
+        )}
+        {loadingAll ? (
+          <div>Loading users...</div>
+        ) : allUsers.length > 0 ? (
+          <>
+            <h4 className="text-lg font-semibold text-gray-700 mb-2">Suggested Users</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {allUsers.map(user => (
+                <FriendCard
+                  key={user.id || user._id}
+                  friend={{ id: user.id || user._id, user, friendSince: user.createdAt || '', status: 'offline' }}
+                  isOnline={false}
+                  actions={[]}
+                />
+              ))}
+            </div>
+          </>
+        ) : !error && !loadingAll ? (
+          <div className="text-gray-400">No users found.</div>
+        ) : null}
       </div>
     );
   }

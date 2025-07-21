@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import authRoutes from './modules/auth/routes/auth.routes';
 import gameRoutes from './modules/game/routes/game.routes';
 import chatRoutes from './modules/chat/routes/chat.routes';
-import { friendsRoutes } from './modules/friends';
+import { requestRoutes, blockRoutes, userRoutes } from './modules/friends';
 import { notificationsRoutes } from './modules/notifications';
 import { adminRoutes } from './modules/admin';
 import { logInfo, logWarn } from './utils/logger';
@@ -138,7 +138,10 @@ router.use('/auth', authRoutes);
 // Protected routes (require authentication)
 router.use('/game', authenticate, gameRoutes);
 router.use('/chat', authenticate, chatRoutes);
-router.use('/friends', authenticate, friendsRoutes);
+// Modular friends routes
+router.use('/friends', authenticate, requestRoutes); // /request, /requests
+router.use('/friends', authenticate, blockRoutes);   // /block/:userId, /blocked
+router.use('/friends', authenticate, userRoutes);    // /search
 router.use('/notifications', authenticate, notificationsRoutes);
 router.use('/admin', authenticate, adminRoutes);
 

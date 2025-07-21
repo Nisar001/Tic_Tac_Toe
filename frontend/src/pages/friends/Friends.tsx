@@ -2,17 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FriendsList } from '../../components/friends/FriendsList';
 import { FriendRequests } from '../../components/friends/FriendRequests';
+
 import { AddFriend } from '../../components/friends/AddFriend';
-import { FaUsers, FaUserPlus, FaBell } from 'react-icons/fa';
+import { BlockedUsers } from '../../components/friends/BlockedUsers';
+import { FaUsers, FaUserPlus, FaBell, FaBan } from 'react-icons/fa';
+
 
 export const Friends: React.FC = () => {
   const { state, loadFriends, loadFriendRequests } = useFriendsContext();
-  const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add'>('friends');
+  const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add' | 'blocked'>('friends');
 
   useEffect(() => {
     loadFriends();
     loadFriendRequests();
   }, [loadFriends, loadFriendRequests]);
+
 
   const tabs = [
     {
@@ -32,7 +36,13 @@ export const Friends: React.FC = () => {
       label: 'Add Friend',
       icon: FaUserPlus,
     },
+    {
+      id: 'blocked' as const,
+      label: 'Blocked',
+      icon: FaBan,
+    },
   ];
+
 
   const renderContent = () => {
     switch (activeTab) {
@@ -42,6 +52,8 @@ export const Friends: React.FC = () => {
         return <FriendRequests />;
       case 'add':
         return <AddFriend />;
+      case 'blocked':
+        return <BlockedUsers />;
       default:
         return <FriendsList />;
     }
