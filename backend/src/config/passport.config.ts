@@ -114,7 +114,7 @@ if (socialConfig.providers.google.clientId && socialConfig.providers.google.clie
     clientID: socialConfig.providers.google.clientId,
     clientSecret: socialConfig.providers.google.clientSecret,
     callbackURL: googleCallbackURL,
-  }, async (accessToken, refreshToken, profile, done) => {
+  }, async (accessToken: any, refreshToken: any, profile: any, done: Function) => {
     try {
       const user = await findOrCreateUser(profile, 'google');
       return done(null, user);
@@ -140,7 +140,7 @@ if (socialConfig.providers.facebook.appId && socialConfig.providers.facebook.app
     clientSecret: socialConfig.providers.facebook.appSecret,
     callbackURL: facebookCallbackURL,
     profileFields: ['id', 'name', 'photos', 'displayName'], // Removed 'emails' temporarily
-  }, async (accessToken, refreshToken, profile, done) => {
+  }, async (accessToken: any, refreshToken: any, profile: any, done: Function) => {
     try {
       const user = await findOrCreateUser(profile, 'facebook');
       return done(null, user);

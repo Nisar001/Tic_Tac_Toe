@@ -1,5 +1,5 @@
 import * as jwt from 'jsonwebtoken';
-import { JwtPayload, Secret } from 'jsonwebtoken';
+import { Secret } from 'jsonwebtoken';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { config } from '../config';
@@ -155,7 +155,7 @@ export class AuthUtils {
     return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   }
 
-  static verifyToken(token: string, type: 'access' | 'refresh' = 'access'): JWTPayload | JwtPayload {
+  static verifyToken(token: string, type: 'access' | 'refresh' = 'access'): any {
     const secret = type === 'access' ? config.JWT_SECRET : config.JWT_REFRESH_SECRET;
     try {
       const decoded = jwt.verify(token, secret);

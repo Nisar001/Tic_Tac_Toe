@@ -16,11 +16,11 @@ export interface JobStats {
 }
 
 export class SchedulerService {
-  private static livesRegenJob: cron.ScheduledTask | null = null;
-  private static cleanupJob: cron.ScheduledTask | null = null;
-  private static statsJob: cron.ScheduledTask | null = null;
-  private static notificationJob: cron.ScheduledTask | null = null;
-  private static securityJob: cron.ScheduledTask | null = null;
+  private static livesRegenJob: any = null;
+  private static cleanupJob: any = null;
+  private static statsJob: any = null;
+  private static notificationJob: any = null;
+  private static securityJob: any = null;
 
   private static jobStats: Map<string, JobStats> = new Map();
   private static isInitialized = false;

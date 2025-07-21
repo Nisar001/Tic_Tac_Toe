@@ -16,7 +16,7 @@ export interface EmailValidationResult {
 }
 
 export class EmailService {
-  private static transporter: nodemailer.Transporter;
+  private static transporter: any;
   private static emailQueue: Map<string, number> = new Map();
   private static readonly MAX_EMAILS_PER_HOUR = 10;
   private static readonly EMAIL_COOLDOWN_MS = 60 * 1000; // 1 minute cooldown
@@ -45,7 +45,7 @@ export class EmailService {
         rateLimit: 14,
       });
 
-      this.transporter.verify((error, success) => {
+      this.transporter.verify((error: any, success: any) => {
         if (error) {
           console.error('Email transporter verification failed:', error);
         } else {
