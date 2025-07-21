@@ -5,7 +5,12 @@ import { FriendCard } from './FriendCard';
 import { FaUsers, FaGamepad } from 'react-icons/fa';
 import friendsAPI from '../../services/friends';
 
-export const FriendsList: React.FC = () => {
+
+interface FriendsListProps {
+  search?: string;
+}
+
+export const FriendsList: React.FC<FriendsListProps> = ({ search = '' }) => {
   const { state } = useFriendsContext();
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [loadingAll, setLoadingAll] = useState(false);
@@ -63,12 +68,22 @@ export const FriendsList: React.FC = () => {
     );
   }
 
-  const onlineFriends = state.friends.filter(friend => 
+
+  // Filter friends by search string (case-insensitive)
+  const filterBySearch = (friends: typeof state.friends) => {
+    if (!search.trim()) return friends;
+    return friends.filter(friend =>
+      friend.user.username.toLowerCase().includes(search.trim().toLowerCase()) ||
+      friend.user.email.toLowerCase().includes(search.trim().toLowerCase())
+    );
+  };
+
+  const onlineFriends = filterBySearch(state.friends.filter(friend => 
     state.onlineFriends.includes(friend.id)
-  );
-  const offlineFriends = state.friends.filter(friend => 
+  ));
+  const offlineFriends = filterBySearch(state.friends.filter(friend => 
     !state.onlineFriends.includes(friend.id)
-  );
+  ));
 
   return (
     <div className="p-6">

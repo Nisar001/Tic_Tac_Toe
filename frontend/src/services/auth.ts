@@ -17,10 +17,10 @@ import {
 export const authAPI = {
   // Public auth endpoints
   register: (data: RegisterRequest) => 
-    apiClient.post<RegisterResponse>('/auth/register', data),
+    apiClient.post('/auth/register', data),
 
   login: (data: LoginRequest) => 
-    apiClient.post<AuthResponse>('/auth/login', data),
+    apiClient.post('/auth/login', data),
 
   verifyEmail: (data: VerifyEmailRequest) => 
     apiClient.post('/auth/verify-email', data),
@@ -34,15 +34,15 @@ export const authAPI = {
   resetPassword: (data: ResetPasswordRequest) => 
     apiClient.post('/auth/reset-password', data),
 
-  refreshToken: () => 
-    apiClient.post<AuthResponse>('/auth/refresh-token'),
+  refreshToken: (refreshToken: string) => 
+    apiClient.post('/auth/refresh-token', { refreshToken }),
 
   // Protected auth endpoints (require authentication)
   getProfile: () => 
-    apiClient.get<ProfileResponse>('/auth/profile'),
+    apiClient.get('/auth/profile'),
 
   updateProfile: (data: UpdateProfileRequest) => 
-    apiClient.patch<ProfileResponse>('/auth/profile', data),
+    apiClient.patch('/auth/profile', data),
 
   changePassword: (data: ChangePasswordRequest) => 
     apiClient.post('/auth/change-password', data),

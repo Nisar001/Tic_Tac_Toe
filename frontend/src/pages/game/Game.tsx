@@ -8,15 +8,15 @@ const Game: React.FC = () => {
   const { getActiveGames, createGame, isLoading } = useGame();
   const [games, setGames] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const navigate = useNavigate();
-
-  // ...existing code...
 
   const loadGames = useCallback(async () => {
     setError(null);
+    setRetrying(false);
     try {
-      const response = await getActiveGames();
-      setGames(response?.games || []);
+      const games = await getActiveGames();
+      setGames(games);
     } catch (err: any) {
       setError(err?.message || 'Failed to load games');
     }
@@ -26,12 +26,21 @@ const Game: React.FC = () => {
     loadGames();
   }, [loadGames]);
 
+  const handleRetry = () => {
+    setRetrying(true);
+    loadGames();
+  };
+
   const handleCreateGame = async () => {
     try {
       const game = await createGame({
         gameConfig: {
           gameMode: 'classic',
           isPrivate: false,
+          maxPlayers: 2,
+          timeLimit: 300, // seconds
+          gameName: 'Quick Match',
+          password: '',
         }
       });
       navigate(`/game/${game.roomId || game.room || game.id}`);
@@ -39,7 +48,7 @@ const Game: React.FC = () => {
       setError('Failed to create game');
     }
   };
-
+// ...existing code...
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
       <div className="flex items-center justify-between mb-6">
@@ -55,7 +64,17 @@ const Game: React.FC = () => {
       {isLoading ? (
         <LoadingSpinner />
       ) : error ? (
-        <div className="text-center text-red-600 py-8">{error}</div>
+        <div className="text-center text-red-600 py-8">
+          {error}
+          <br />
+          <button
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            onClick={handleRetry}
+            disabled={retrying}
+          >
+            {retrying ? 'Retrying...' : 'Retry'}
+          </button>
+        </div>
       ) : games.length === 0 ? (
         <div className="text-center py-8 text-gray-500">No active games. Create one to get started!</div>
       ) : (
@@ -72,10 +91,10 @@ const Game: React.FC = () => {
                 </div>
                 <div>
                   <p className="font-medium text-gray-900">
-                    Game #{(game.roomId || game.room).slice(0, 8)}
+                    Game #{(game.roomId || game.room || game.id).slice(0, 8)}
                   </p>
                   <p className="text-sm text-gray-500">
-                    {(game.players.player2 ? 2 : 1)}/2 players • {game.status}
+                    {(game.players?.player2 ? 2 : 1)}/2 players • {game.status}
                   </p>
                 </div>
               </div>
@@ -96,6 +115,6 @@ const Game: React.FC = () => {
       )}
     </div>
   );
-};
+}
 
 export default Game;

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import toast from 'react-hot-toast';
 import { chatAPI } from '../services/chat';
 import { ChatRoom, ChatMessage } from '../types';
 import { useSocket } from './SocketContext';
@@ -108,16 +109,17 @@ const chatReducer = (state: ChatState, action: ChatAction): ChatState => {
   }
 };
 
-// ...existing code...
 export interface ChatContextType {
   state: ChatState;
   loadRooms: () => Promise<void>;
   joinRoom: (roomId: string) => Promise<void>;
   leaveRoom: (roomId: string) => Promise<void>;
-  sendMessage: (roomId: string, content: string) => Promise<void>;
-  loadMessages: (roomId: string, page?: number) => Promise<void>;
+  sendMessage: (roomId: string, content: string, messageType?: string) => Promise<void>;
+  loadMessages: (roomId: string, limit?: number, offset?: number) => Promise<void>;
   setActiveRoom: (roomId: string | null) => void;
   createRoom: (name: string) => Promise<void>;
+  deleteChatRoom: (roomId: string) => Promise<void>;
+  getChatRoomUsers: (roomId: string) => Promise<any[]>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -162,65 +164,78 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }
   }, [socket]);
 
-  const loadRooms = async () => {
+  let roomsLoading = false;
+  const loadRooms = async (retry = false) => {
+    if (state.loading || roomsLoading) return;
+    roomsLoading = true;
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const response = await chatAPI.getChatRooms();
-      // The chat service now returns the data directly
-      const rooms = response?.data?.rooms || [];
+      const rooms = response?.rooms || [];
       dispatch({ type: 'SET_ROOMS', payload: rooms });
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load chat rooms' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to load chat rooms';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
+    } finally {
+      roomsLoading = false;
     }
   };
 
-  const joinRoom = async (roomId: string) => {
+  const joinRoom = async (roomId: string, retry = false) => {
     try {
       await chatAPI.joinChatRoom(roomId);
       if (socket) {
         socket.emit('room:join', { roomId });
       }
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to join room' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to join room';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
     }
   };
 
-  const leaveRoom = async (roomId: string) => {
+  const leaveRoom = async (roomId: string, retry = false) => {
     try {
       await chatAPI.leaveChatRoom(roomId);
       if (socket) {
         socket.emit('room:leave', { roomId });
       }
       dispatch({ type: 'LEAVE_ROOM', payload: roomId });
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to leave room' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to leave room';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
     }
   };
 
-  const sendMessage = async (roomId: string, content: string) => {
+  const sendMessage = async (roomId: string, content: string, messageType: string = 'text', retry = false) => {
     try {
-      await chatAPI.sendMessage({
-        message: content,
-        type: 'text',
-        roomId: roomId,
-      });
-      
+      await chatAPI.sendRoomMessage(roomId, content, messageType);
       if (socket) {
-        socket.emit('message:send', { roomId, content });
+        socket.emit('message:send', { roomId, content, messageType });
       }
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to send message' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to send message';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
     }
   };
 
-  const loadMessages = async (roomId: string, page = 1) => {
+  const loadMessages = async (roomId: string, limit = 50, offset = 0, retry = false) => {
     try {
-      const response = await chatAPI.getChatHistory(roomId, page, 50);
-      // The chat service now returns the data directly
-      const messages = response?.data?.messages || [];
+      const response = await chatAPI.getRoomMessages(roomId, limit, offset);
+      const messages = response?.messages || [];
       dispatch({ type: 'SET_MESSAGES', payload: { roomId, messages } });
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load messages' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to load messages';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
     }
   };
 
@@ -228,13 +243,42 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     dispatch({ type: 'SET_ACTIVE_ROOM', payload: roomId });
   };
 
-  const createRoom = async (name: string) => {
+  const createRoom = async (name: string, type: string = 'private', description?: string) => {
     try {
-      await chatAPI.createChatRoom({ name });
+      await chatAPI.createChatRoom({ name, type, description });
       await loadRooms();
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to create chat room' });
-      throw error;
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to create chat room';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      throw new Error(message);
+    }
+  };
+
+
+  const deleteChatRoom = async (roomId: string, retry = false) => {
+    try {
+      await chatAPI.deleteChatRoom(roomId);
+      await loadRooms();
+      dispatch({ type: 'SET_ACTIVE_ROOM', payload: null });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to delete chat room';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
+    }
+  };
+
+  const getChatRoomUsers = async (roomId: string, retry = false) => {
+    try {
+      const users = await chatAPI.getChatRoomUsers(roomId);
+      return users?.participants || [];
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to fetch users';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
+      return [];
     }
   };
 
@@ -247,6 +291,8 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     loadMessages,
     setActiveRoom,
     createRoom,
+    deleteChatRoom,
+    getChatRoomUsers,
   };
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;

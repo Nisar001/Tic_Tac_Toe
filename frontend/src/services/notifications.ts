@@ -32,8 +32,8 @@ export const notificationsAPI = {
 
   // Get unread notifications count
   getUnreadCount: async (): Promise<number> => {
-    const response = await apiClient.get<{ data: { unreadCount: number } }>('/notifications/unread-count');
-    return response.data?.data?.unreadCount || 0;
+    const response = await apiClient.get<{ data: { count: number } }>('/notifications/unread-count');
+    return response.data?.data?.count || 0;
   },
 
   // Mark specific notification as read

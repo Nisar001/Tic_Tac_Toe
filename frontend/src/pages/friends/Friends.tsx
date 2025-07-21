@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import toast from 'react-hot-toast';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FriendsList } from '../../components/friends/FriendsList';
 import { FriendRequests } from '../../components/friends/FriendRequests';
@@ -11,6 +12,7 @@ import { FaUsers, FaUserPlus, FaBell, FaBan } from 'react-icons/fa';
 export const Friends: React.FC = () => {
   const { state, loadFriends, loadFriendRequests } = useFriendsContext();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add' | 'blocked'>('friends');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     loadFriends();
@@ -44,45 +46,66 @@ export const Friends: React.FC = () => {
   ];
 
 
+  // Enhanced empty states
   const renderContent = () => {
     switch (activeTab) {
       case 'friends':
-        return <FriendsList />;
+        if (state.friends.length === 0) {
+          return <div className="p-8 text-center text-gray-400">No friends yet. Add some friends to get started!</div>;
+        }
+        return <FriendsList search={search} />;
       case 'requests':
+        if (state.friendRequests.received.length === 0 && state.friendRequests.sent.length === 0) {
+          return <div className="p-8 text-center text-gray-400">No friend requests.</div>;
+        }
         return <FriendRequests />;
       case 'add':
         return <AddFriend />;
       case 'blocked':
         return <BlockedUsers />;
       default:
-        return <FriendsList />;
+        return <FriendsList search={search} />;
     }
   };
 
   return (
-    <div className="h-full bg-white rounded-lg shadow-lg overflow-hidden">
+    <div className="h-full bg-white rounded-lg shadow-lg overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="bg-gray-50 border-b border-gray-200 p-6">
-        <h1 className="text-2xl font-bold text-gray-900 flex items-center">
+      <div className="bg-gray-50 border-b border-gray-200 p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex items-center">
           <FaUsers className="mr-3 text-blue-600" />
-          Friends
-        </h1>
+          <h1 className="text-2xl font-bold text-gray-900">Friends</h1>
+        </div>
+        {/* Search bar only for friends tab */}
+        {activeTab === 'friends' && (
+          <input
+            type="text"
+            placeholder="Search friends..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full sm:w-64 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        )}
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200">
-        <nav className="flex">
+      <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
+        <nav className="flex overflow-x-auto scrollbar-hide">
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                setActiveTab(tab.id);
+                toast.success(tab.label + ' tab selected', { id: 'tab-toast', duration: 800 });
+              }}
               className={`
-                flex items-center px-6 py-4 text-sm font-medium border-b-2 transition-colors
+                flex items-center px-6 py-4 text-sm font-medium border-b-2 transition-all duration-200
                 ${activeTab === tab.id
-                  ? 'border-blue-500 text-blue-600 bg-blue-50'
+                  ? 'border-blue-500 text-blue-600 bg-blue-50 shadow-sm'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }
               `}
+              title={tab.label}
             >
               <tab.icon className="mr-2" />
               {tab.label}
@@ -97,7 +120,7 @@ export const Friends: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto bg-gray-50">
         {state.loading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>

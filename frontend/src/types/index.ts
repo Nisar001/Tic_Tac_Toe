@@ -516,6 +516,14 @@ export interface GameContextType {
   getActiveGames: () => Promise<any>;
   getUserStats: () => Promise<UserStats>;
   getLeaderboard: (page?: number, limit?: number) => Promise<LeaderboardEntry[]>;
+  // --- Added APIs ---
+  joinMatchmakingQueue: (data: any) => Promise<any>;
+  leaveMatchmakingQueue: () => Promise<any>;
+  getMatchmakingStatus: () => Promise<any>;
+  getQueueStats: () => Promise<any>;
+  getGameHistory: (page?: number, limit?: number) => Promise<any>;
+  forceMatch: (player1Id: string, player2Id: string) => Promise<any>;
+  cleanupQueue: () => Promise<any>;
 }
 
 export interface SocketContextType {

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import toast from 'react-hot-toast';
 import friendsAPI from '../services/friends';
 import { Friend, FriendRequest } from '../types';
 import { useSocket } from './SocketContext';
@@ -97,16 +98,7 @@ const friendsReducer = (state: FriendsState, action: FriendsAction): FriendsStat
   }
 };
 
-interface FriendsContextType {
-  state: FriendsState;
-  loadFriends: () => Promise<void>;
-  loadFriendRequests: () => Promise<void>;
-  sendFriendRequest: (data: { receiverId: string; message?: string }) => Promise<void>;
-  acceptFriendRequest: (requestId: string) => Promise<void>;
-  rejectFriendRequest: (requestId: string) => Promise<void>;
-  removeFriend: (friendId: string) => Promise<void>;
-  searchUsers: (query: string) => Promise<any[]>;
-}
+
 
 const FriendsContext = createContext<FriendsContextType | undefined>(undefined);
 
@@ -118,11 +110,19 @@ export const useFriendsContext = () => {
   return context;
 };
 
-interface FriendsProviderProps {
-  children: ReactNode;
+
+export interface FriendsContextType {
+  state: FriendsState;
+  loadFriends: (retry?: boolean) => Promise<void>;
+  loadFriendRequests: (retry?: boolean) => Promise<void>;
+  sendFriendRequest: (data: { receiverId: string; message?: string }) => Promise<void>;
+  acceptFriendRequest: (requestId: string) => Promise<void>;
+  rejectFriendRequest: (requestId: string) => Promise<void>;
+  removeFriend: (friendId: string) => Promise<void>;
+  searchUsers: (query: string) => Promise<any[]>;
 }
 
-export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) => {
+export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(friendsReducer, initialState);
   const { socket } = useSocket();
 
@@ -163,7 +163,10 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
   }, [socket]);
 
   // Load friends from new modular endpoint
-  const loadFriends = async () => {
+  let friendsLoading = false;
+  const loadFriends = async (retry = false) => {
+    if (state.loading || friendsLoading) return;
+    friendsLoading = true;
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const users = await friendsAPI.getFriends();
@@ -179,13 +182,21 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
         });
         dispatch({ type: 'SET_FRIENDS', payload: friends });
       }
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load friends' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to load friends';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
+    } finally {
+      friendsLoading = false;
     }
   };
 
   // Load friend requests from new modular endpoint
-  const loadFriendRequests = async () => {
+  let friendRequestsLoading = false;
+  const loadFriendRequests = async (retry = false) => {
+    if (state.loading || friendRequestsLoading) return;
+    friendRequestsLoading = true;
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const requests = await friendsAPI.getFriendRequests();
@@ -202,8 +213,13 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
           received: (requests.received || []).map(mapReq),
         },
       });
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to load friend requests' });
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to load friend requests';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      if (!retry) throw new Error(message);
+    } finally {
+      friendRequestsLoading = false;
     }
   };
 
@@ -215,7 +231,9 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
         dispatch({ type: 'ADD_FRIEND_REQUEST', payload: { type: 'sent', request } });
       }
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to send friend request' });
+      const message = error instanceof Error ? error.message : 'Failed to send friend request';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
     }
   };
 
@@ -226,7 +244,9 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
       dispatch({ type: 'REMOVE_FRIEND_REQUEST', payload: requestId });
       // Friend will be added via socket event
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to accept friend request' });
+      const message = error instanceof Error ? error.message : 'Failed to accept friend request';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
     }
   };
 
@@ -236,7 +256,9 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
       await friendsAPI.rejectFriendRequest(requestId);
       dispatch({ type: 'REMOVE_FRIEND_REQUEST', payload: requestId });
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to reject friend request' });
+      const message = error instanceof Error ? error.message : 'Failed to reject friend request';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
     }
   };
 
@@ -246,7 +268,9 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
       await friendsAPI.removeFriend(friendId);
       dispatch({ type: 'REMOVE_FRIEND', payload: friendId });
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to remove friend' });
+      const message = error instanceof Error ? error.message : 'Failed to remove friend';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
     }
   };
 
@@ -256,7 +280,9 @@ export const FriendsProvider: React.FC<FriendsProviderProps> = ({ children }) =>
       const users = await friendsAPI.searchUsers(query);
       return users || [];
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: 'Failed to search users' });
+      const message = error instanceof Error ? error.message : 'Failed to search users';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
       return [];
     }
   };

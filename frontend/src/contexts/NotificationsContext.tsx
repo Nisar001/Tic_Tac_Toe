@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import toast from 'react-hot-toast';
 import { notificationsAPI } from '../services/notifications';
 import { Notification } from '../types';
 import { useSocket } from './SocketContext';
@@ -99,6 +100,7 @@ interface NotificationsContextType {
   markAllAsRead: () => Promise<void>;
   deleteNotification: (notificationId: string) => Promise<void>;
   getUnreadCount: () => Promise<void>;
+  deleteAllRead: () => Promise<number>;
 }
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
@@ -113,52 +115,69 @@ export const NotificationsProvider: React.FC<NotificationsProviderProps> = ({ ch
   const { user } = useAuth();
 
   // Load notifications
-  const loadNotifications = async (params?: { page?: number; limit?: number; unreadOnly?: boolean }) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await notificationsAPI.getNotifications(params);
-      dispatch({ 
-        type: 'SET_NOTIFICATIONS', 
-        payload: {
-          notifications: response.notifications,
-          pagination: response.pagination,
-          unreadCount: response.unreadCount
-        }
-      });
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to load notifications' });
-    }
-  };
+    let notificationsLoading = false;
+    const loadNotifications = async (params?: { page?: number; limit?: number; unreadOnly?: boolean }) => {
+      if (state.loading || notificationsLoading) return;
+      notificationsLoading = true;
+      try {
+        dispatch({ type: 'SET_LOADING', payload: true });
+        const response = await notificationsAPI.getNotifications(params);
+        dispatch({ 
+          type: 'SET_NOTIFICATIONS', 
+          payload: {
+            notifications: response.notifications,
+            pagination: response.pagination,
+            unreadCount: response.unreadCount
+          }
+        });
+      } catch (error: any) {
+        const message = error?.response?.data?.message || error?.message || 'Failed to load notifications';
+        dispatch({ type: 'SET_ERROR', payload: message });
+        toast.error(message);
+      } finally {
+        notificationsLoading = false;
+      }
+    };
 
   // Mark notification as read
   const markAsRead = async (notificationId: string) => {
     try {
       await notificationsAPI.markAsRead(notificationId);
       dispatch({ type: 'MARK_READ', payload: notificationId });
+      toast.success('Notification marked as read');
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to mark as read' });
+      const message = error instanceof Error ? error.message : 'Failed to mark as read';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
     }
   };
 
   // Mark all notifications as read
-  const markAllAsRead = async () => {
-    try {
-      await notificationsAPI.markAllAsRead();
-      dispatch({ type: 'MARK_ALL_READ' });
-    } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to mark all as read' });
-    }
-  };
+    const markAllAsRead = async (retry = false) => {
+      try {
+        await notificationsAPI.markAllAsRead();
+        dispatch({ type: 'MARK_ALL_READ' });
+        toast.success('All notifications marked as read');
+      } catch (error: any) {
+        const message = error?.response?.data?.message || error?.message || 'Failed to mark all as read';
+        toast.error(message);
+        if (!retry) throw new Error(message);
+      }
+    };
 
   // Delete notification
   const deleteNotification = async (notificationId: string) => {
     try {
       await notificationsAPI.deleteNotification(notificationId);
       dispatch({ type: 'DELETE_NOTIFICATION', payload: notificationId });
+      toast.success('Notification deleted');
     } catch (error) {
-      dispatch({ type: 'SET_ERROR', payload: error instanceof Error ? error.message : 'Failed to delete notification' });
+      const message = error instanceof Error ? error.message : 'Failed to delete notification';
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
     }
   };
+
 
   // Get unread count
   const getUnreadCount = async () => {
@@ -169,6 +188,28 @@ export const NotificationsProvider: React.FC<NotificationsProviderProps> = ({ ch
       console.error('Failed to get unread count:', error);
     }
   };
+
+  // Delete all read notifications
+    const deleteAllRead = async (retry = false): Promise<number> => {
+      try {
+        const result = await notificationsAPI.deleteAllRead();
+        dispatch({
+          type: 'SET_NOTIFICATIONS',
+          payload: {
+            notifications: state.notifications.filter(n => !n.isRead),
+            pagination: state.pagination,
+            unreadCount: state.unreadCount
+          }
+        });
+        toast.success('All read notifications deleted');
+        return result.deletedCount;
+      } catch (error: any) {
+        const message = error?.response?.data?.message || error?.message || 'Failed to delete read notifications';
+        toast.error(message);
+        if (!retry) throw new Error(message);
+        return 0;
+      }
+    };
 
   // Socket event listeners
   useEffect(() => {
@@ -205,6 +246,7 @@ export const NotificationsProvider: React.FC<NotificationsProviderProps> = ({ ch
     markAllAsRead,
     deleteNotification,
     getUnreadCount,
+    deleteAllRead,
   };
 
   return (

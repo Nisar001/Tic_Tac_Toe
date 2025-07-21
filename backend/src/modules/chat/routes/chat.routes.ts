@@ -89,9 +89,9 @@ router.post('/send',
 router.post('/rooms',
   chatRateLimit,
   asyncHandler(async (req: Request, res: Response) => {
-    const { name, description } = req.body;
+    const { name, description, type = 'private' } = req.body;
     const user = req.user as any;
-    
+    const { socketManager } = require('../../../server');
     try {
       if (!name || typeof name !== 'string') {
         return res.status(400).json({
@@ -99,16 +99,34 @@ router.post('/rooms',
           message: 'Room name is required'
         });
       }
-
-      // For simplicity, return a mock response for testing
+      if (!socketManager || typeof socketManager.getChatSocket !== 'function') {
+        return res.status(503).json({
+          success: false,
+          message: 'Chat service is not available'
+        });
+      }
+      const chatSocket = socketManager.getChatSocket();
+      // Generate a unique room ID
       const roomId = `room_${name.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
-      
+      // Register the room in the socket layer
+      chatSocket['chatRooms'].set(roomId, {
+        id: roomId,
+        name,
+        type,
+        participants: [user._id],
+        messages: [],
+        createdAt: new Date(),
+        lastActivity: new Date(),
+        description: description || '',
+        createdBy: user._id
+      });
       res.status(201).json({
         success: true,
         message: 'Chat room created successfully',
         data: {
           roomId,
           name,
+          type,
           description: description || '',
           createdBy: user._id,
           createdAt: new Date(),

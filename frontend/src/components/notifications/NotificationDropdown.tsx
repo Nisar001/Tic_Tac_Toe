@@ -2,11 +2,13 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNotifications } from '../../contexts/NotificationsContext';
 import { NotificationItem } from './NotificationItem';
 import { FaBell, FaCheck, FaEye } from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 
 export const NotificationDropdown: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { state, loadNotifications, markAllAsRead } = useNotifications();
+  const navigate = useNavigate();
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -106,8 +108,7 @@ export const NotificationDropdown: React.FC = () => {
               <button
                 onClick={() => {
                   setIsOpen(false);
-                  // Navigate to notifications page (you'll need to implement this)
-                  // navigate('/notifications');
+                  navigate('/notifications');
                 }}
                 className="w-full flex items-center justify-center space-x-2 p-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded transition-colors"
               >

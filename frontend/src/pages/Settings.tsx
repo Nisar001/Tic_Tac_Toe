@@ -20,6 +20,19 @@ import {
 
 const Settings: React.FC = () => {
   const { user, refreshUser, logout } = useAuth();
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+  const handleLogoutAll = async () => {
+    setLogoutAllLoading(true);
+    try {
+      await authAPI.logoutAll();
+      toast.success('Logged out from all sessions.');
+      logout();
+    } catch (error: any) {
+      toast.error(error?.response?.data?.message || 'Failed to logout all sessions');
+    } finally {
+      setLogoutAllLoading(false);
+    }
+  };
   const [activeTab, setActiveTab] = useState<'general' | 'game' | 'account'>('general');
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -321,6 +334,26 @@ const Settings: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Logout All Sessions */}
+                <div className="border border-yellow-200 bg-yellow-50 p-4 rounded-lg mb-6">
+                  <div className="flex items-start">
+                    <ExclamationTriangleIcon className="w-6 h-6 text-yellow-600 mt-0.5 mr-3 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-yellow-900 mb-2">Logout All Sessions</h4>
+                      <p className="text-sm text-yellow-700 mb-4">
+                        This will log you out from all devices and browsers. You will need to log in again everywhere.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={handleLogoutAll}
+                        disabled={logoutAllLoading}
+                        className="bg-yellow-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {logoutAllLoading ? 'Logging out...' : 'Logout All Sessions'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 {/* Delete Account */}
                 <div className="border-2 border-red-200 bg-red-50 p-4 rounded-lg">
                   <div className="flex items-start">

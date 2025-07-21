@@ -1,6 +1,6 @@
 // API Configuration
-export const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://tic-tac-toe-uf5h.onrender.com/api';
-export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'https://tic-tac-toe-uf5h.onrender.com';
+export const API_BASE_URL = process.env.REACT_APP_API_URL || '';
+export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || '';
 
 // App Configuration
 export const APP_NAME = process.env.REACT_APP_APP_NAME || 'Tic Tac Toe';

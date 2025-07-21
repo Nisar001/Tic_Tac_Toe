@@ -9,7 +9,7 @@ const GameBoard: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currentGame, makeMove, getGameState, isLoading } = useGame();
+  const { currentGame, makeMove, getGameState, isLoading, forfeitGame } = useGame();
   const [board, setBoard] = useState<(string | null)[][]>(Array(3).fill(null).map(() => Array(3).fill(null)));
   const [isMyTurn, setIsMyTurn] = useState(false);
 
@@ -38,14 +38,16 @@ const GameBoard: React.FC = () => {
     }
   }, [currentGame, user]);
 
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
   const loadGameState = async () => {
     if (!roomId) return;
-    
+    setLoadError(null);
+    setRetrying(false);
     try {
       await getGameState(roomId);
-    } catch (error) {
-      console.error('Failed to load game state:', error);
-      navigate('/');
+    } catch (error: any) {
+      setLoadError(error?.message || 'Failed to load game state');
     }
   };
 
@@ -61,6 +63,18 @@ const GameBoard: React.FC = () => {
       });
     } catch (error) {
       console.error('Failed to make move:', error);
+    }
+  };
+
+  const handleForfeit = async () => {
+    if (!currentGame) return;
+    const id = currentGame.roomId ?? currentGame.room ?? currentGame.id ?? '';
+    if (!id) return;
+    try {
+      await forfeitGame(id);
+      await getGameState(id);
+    } catch (error) {
+      console.error('Failed to forfeit game:', error);
     }
   };
 
@@ -86,6 +100,30 @@ const GameBoard: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <LoadingSpinner size="lg" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600">{loadError}</p>
+        <button
+          onClick={() => {
+            setRetrying(true);
+            loadGameState();
+          }}
+          className="mt-4 btn-primary"
+          disabled={retrying}
+        >
+          {retrying ? 'Retrying...' : 'Retry'}
+        </button>
+        <button
+          onClick={() => navigate('/')}
+          className="mt-4 btn-secondary ml-2"
+        >
+          Back to Dashboard
+        </button>
       </div>
     );
   }
@@ -214,12 +252,7 @@ const GameBoard: React.FC = () => {
               Leave Game
             </button>
             <button
-              onClick={() => {
-                if (roomId) {
-                  // forfeitGame(roomId);
-                  navigate('/');
-                }
-              }}
+              onClick={handleForfeit}
               className="btn-danger w-full sm:w-auto"
             >
               Forfeit

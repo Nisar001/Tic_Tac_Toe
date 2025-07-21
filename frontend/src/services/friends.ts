@@ -5,15 +5,17 @@ import {
   SendFriendRequestRequest 
 } from '../types';
 
+
 export const friendsAPI = {
   // Friends
   getFriends: async (): Promise<User[]> => {
-    const response = await apiClient.get<{ data: User[] }>('/friends');
+    // Try the most likely endpoint for friends list
+    const response = await apiClient.get<{ data: User[] }>('/friends/list');
     return response.data?.data || [];
   },
   removeFriend: async (friendId: string) => {
     const response = await apiClient.delete(`/friends/${friendId}`);
-    return response.data;
+    return response.data?.data;
   },
 
   // Friend Requests
@@ -27,28 +29,25 @@ export const friendsAPI = {
   },
   acceptFriendRequest: async (requestId: string) => {
     const response = await apiClient.post(`/friends/requests/${requestId}/accept`);
-    return response.data;
+    return response.data?.data;
   },
   rejectFriendRequest: async (requestId: string) => {
     const response = await apiClient.post(`/friends/requests/${requestId}/reject`);
-    return response.data;
+    return response.data?.data;
   },
   cancelFriendRequest: async (requestId: string) => {
     const response = await apiClient.delete(`/friends/requests/${requestId}`);
-    return response.data;
+    return response.data?.data;
   },
-
-  // User Search
-  // searchUsers already defined above, removed duplicate
 
   // Blocking
   blockUser: async (userId: string) => {
     const response = await apiClient.post(`/friends/block/${userId}`);
-    return response.data;
+    return response.data?.data;
   },
   unblockUser: async (userId: string) => {
     const response = await apiClient.delete(`/friends/block/${userId}`);
-    return response.data;
+    return response.data?.data;
   },
   getBlockedUsers: async (): Promise<User[]> => {
     const response = await apiClient.get<{ data: User[] }>('/friends/blocked');

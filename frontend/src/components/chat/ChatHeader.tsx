@@ -2,11 +2,15 @@ import React from 'react';
 import { FaCircle, FaUsers, FaHashtag } from 'react-icons/fa';
 import { ChatRoom } from '../../types';
 
+import { FaTrash, FaUserFriends } from 'react-icons/fa';
 interface ChatHeaderProps {
   room?: ChatRoom;
   roomName?: string;
   roomType?: string;
   onlineUsers: string[];
+  onViewUsers?: () => void;
+  onDeleteRoom?: () => void;
+  canDelete?: boolean;
 }
 
 export const ChatHeader: React.FC<ChatHeaderProps> = ({
@@ -14,6 +18,9 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
   roomName,
   roomType,
   onlineUsers,
+  onViewUsers,
+  onDeleteRoom,
+  canDelete,
 }) => {
   const displayName = room?.name || roomName || 'Chat Room';
   const displayType = room?.type || roomType || 'group';
@@ -58,8 +65,23 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </div>
         
         <div className="flex items-center space-x-2">
-          <FaUsers className="text-gray-400" />
-          <span className="text-sm text-gray-600">{onlineUsers.length}</span>
+          <button
+            className="flex items-center px-2 py-1 text-sm text-blue-600 hover:underline"
+            onClick={onViewUsers}
+            title="View Users"
+          >
+            <FaUserFriends className="mr-1" />
+            {onlineUsers.length}
+          </button>
+          {canDelete && (
+            <button
+              className="ml-2 px-2 py-1 text-sm text-red-600 hover:underline"
+              onClick={onDeleteRoom}
+              title="Delete Room"
+            >
+              <FaTrash />
+            </button>
+          )}
         </div>
       </div>
     </div>

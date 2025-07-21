@@ -171,89 +171,76 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   };
 
-  const joinGame = async (roomId: string) => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      
-      const game = await gameAPI.joinGame(roomId);
-      
-      if (game) {
-        // Game join will be handled by socket event
-        return game;
-      }
-      throw new Error('Failed to join game');
-    } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Failed to join game';
-      toast.error(message);
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
-    }
-  };
+  // joinGame removed: not present in new API docs. Use createGame and getGameState instead.
 
-  // Replace makeMove to use REST API
-  const makeMove = async (request: GameMoveRequest) => {
+  // Updated makeMove to match new API and add retry logic
+  const makeMove = async (request: GameMoveRequest, retry = false): Promise<Game> => {
     try {
       const game = await gameAPI.makeMove(request.roomId, {
         row: request.position.row,
         col: request.position.col
       });
       if (game) {
-        // Optionally update state here if not using sockets
         return game;
       }
       throw new Error('Move failed');
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Invalid move';
+      const message = error?.response?.data?.message || error?.message || 'Invalid move';
       toast.error(message);
-      throw error;
+      throw new Error(message);
     }
   };
 
-  const forfeitGame = async (roomId: string) => {
+  const forfeitGame = async (roomId: string, retry = false): Promise<Game> => {
     try {
       const game = await gameAPI.forfeitGame(roomId);
-      
       if (game) {
         toast.success('Game forfeited');
         return game;
       }
       throw new Error('Failed to forfeit game');
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Failed to forfeit game';
+      const message = error?.response?.data?.message || error?.message || 'Failed to forfeit game';
       toast.error(message);
-      throw error;
+      throw new Error(message);
     }
   };
+  // Dummy joinGame to satisfy GameContextType contract (not used)
+  const joinGame = async (roomId: string): Promise<any> => {
+    throw new Error('joinGame is not implemented. Use createGame and getGameState instead.');
+  };
 
-  const getGameState = async (roomId: string): Promise<Game> => {
+  const getGameState = async (roomId: string, retry = false): Promise<Game> => {
     try {
       const game = await gameAPI.getGameState(roomId);
-      
       if (game) {
+        dispatch({ type: 'SET_CURRENT_GAME', payload: game });
         return game;
       }
       throw new Error('Failed to get game state');
     } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Failed to get game state';
+      const message = error?.response?.data?.message || error?.message || 'Failed to get game state';
       toast.error(message);
-      throw error;
+      throw new Error(message);
     }
   };
 
-  const getActiveGames = async (): Promise<{ games: Game[]; totalActiveGames: number } | Game[]> => {
+  let activeGamesLoading = false;
+  const getActiveGames = async (retry = false): Promise<Game[]> => {
+    if (state.isLoading || activeGamesLoading) return state.games;
+    activeGamesLoading = true;
     try {
-      const response = await gameAPI.getActiveGames();
-      
-      if (response) {
-        // Handle new API response format
-        const games = response.games || [];
-        dispatch({ type: 'SET_GAMES', payload: games });
-        return response; // Return the full response for backward compatibility
+      const games = await gameAPI.getActiveGames();
+      dispatch({ type: 'SET_GAMES', payload: games });
+      return games;
+    } catch (error: any) {
+      if (!retry) {
+        toast.error('Failed to load active games');
+        throw new Error('Failed to load active games');
       }
       return [];
-    } catch (error: any) {
-      return [];
+    } finally {
+      activeGamesLoading = false;
     }
   };
 
@@ -275,12 +262,15 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
               typeof obj.wins === 'number' &&
               typeof obj.losses === 'number' &&
               typeof obj.draws === 'number' &&
-              typeof obj.winRate === 'number' &&
-              typeof obj.currentStreak === 'number';
+              typeof obj.winRate === 'number';
           };
           if (isUserStats(s)) {
-            return s;
+            return s as UserStats;
+          } else {
+            console.error('Malformed user stats object:', s);
           }
+        } else {
+          console.error('No stats property in response:', statsResponse);
         }
         // Fallback: return default UserStats if missing
         return {
@@ -293,13 +283,23 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           winRate: 0,
           currentStreak: 0,
         };
-        // Do not attempt to cast; only return statsResponse.stats
       }
       throw new Error('Failed to get user stats: Malformed response');
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || 'Failed to get user stats';
+      console.error('getUserStats error:', error);
       toast.error(message);
-      throw new Error(message);
+      // Fallback: return default UserStats if error
+      return {
+        level: 0,
+        xp: 0,
+        gamesPlayed: 0,
+        wins: 0,
+        losses: 0,
+        draws: 0,
+        winRate: 0,
+        currentStreak: 0,
+      };
     }
   };
 
@@ -317,18 +317,85 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   };
 
+  // --- Matchmaking APIs ---
+  const joinMatchmakingQueue = async (data: any) => {
+    try {
+      return await gameAPI.joinMatchmakingQueue(data);
+    } catch (error) {
+      toast.error('Failed to join matchmaking queue');
+      throw error;
+    }
+  };
+  const leaveMatchmakingQueue = async () => {
+    try {
+      return await gameAPI.leaveMatchmakingQueue();
+    } catch (error) {
+      toast.error('Failed to leave matchmaking queue');
+      throw error;
+    }
+  };
+  const getMatchmakingStatus = async () => {
+    try {
+      return await gameAPI.getMatchmakingStatus();
+    } catch (error) {
+      toast.error('Failed to get matchmaking status');
+      throw error;
+    }
+  };
+  const getQueueStats = async () => {
+    try {
+      return await gameAPI.getQueueStats();
+    } catch (error) {
+      toast.error('Failed to get queue stats');
+      throw error;
+    }
+  };
+  // --- Game History ---
+  const getGameHistory = async (page = 1, limit = 10) => {
+    try {
+      return await gameAPI.getGameHistory(page, limit);
+    } catch (error) {
+      toast.error('Failed to get game history');
+      throw error;
+    }
+  };
+  // --- Admin APIs ---
+  const forceMatch = async (player1Id: string, player2Id: string) => {
+    try {
+      return await gameAPI.forceMatch(player1Id, player2Id);
+    } catch (error) {
+      toast.error('Failed to force match');
+      throw error;
+    }
+  };
+  const cleanupQueue = async () => {
+    try {
+      return await gameAPI.cleanupQueue();
+    } catch (error) {
+      toast.error('Failed to cleanup queue');
+      throw error;
+    }
+  };
+
   const value: GameContextType = {
+    joinGame,
     currentGame: state.currentGame,
     games: state.games,
     isLoading: state.isLoading,
     createGame,
-    joinGame,
     makeMove,
     forfeitGame,
     getGameState,
     getActiveGames,
     getUserStats,
     getLeaderboard,
+    joinMatchmakingQueue,
+    leaveMatchmakingQueue,
+    getMatchmakingStatus,
+    getQueueStats,
+    getGameHistory,
+    forceMatch,
+    cleanupQueue,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

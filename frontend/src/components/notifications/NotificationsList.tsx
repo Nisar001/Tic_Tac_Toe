@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNotifications } from '../../contexts/NotificationsContext';
 import { NotificationItem } from './NotificationItem';
-import { FaBell, FaCheck, FaSpinner } from 'react-icons/fa';
+import { FaBell, FaCheck, FaSpinner, FaTimes } from 'react-icons/fa';
 
 export const NotificationsList: React.FC = () => {
-  const { state, loadNotifications, markAllAsRead } = useNotifications();
+  const { state, loadNotifications, markAllAsRead, deleteAllRead } = useNotifications();
+  const [deletingAll, setDeletingAll] = useState(false);
+  const [deleteAllMsg, setDeleteAllMsg] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   useEffect(() => {
@@ -22,6 +24,14 @@ export const NotificationsList: React.FC = () => {
     await markAllAsRead();
   };
 
+  const handleDeleteAllRead = async () => {
+    setDeletingAll(true);
+    setDeleteAllMsg(null);
+    const deleted = await deleteAllRead();
+    setDeleteAllMsg(deleted > 0 ? `Deleted ${deleted} read notification${deleted > 1 ? 's' : ''}.` : 'No read notifications to delete.');
+    setDeletingAll(false);
+  };
+
   if (state.loading && state.notifications.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -36,10 +46,18 @@ export const NotificationsList: React.FC = () => {
         <div className="text-red-500 mb-2">
           Error loading notifications
         </div>
-        <p className="text-gray-500 text-sm">{state.error}</p>
+        <p className="text-gray-500 text-sm mb-4">{state.error}</p>
+        <button
+          onClick={() => loadNotifications()}
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Retry
+        </button>
       </div>
     );
   }
+
+  // Removed duplicate function declarations and unreachable code
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -93,8 +111,21 @@ export const NotificationsList: React.FC = () => {
                 <FaCheck />
               </button>
             )}
+
+            {/* Delete all read notifications */}
+            <button
+              onClick={handleDeleteAllRead}
+              className="p-2 text-red-600 hover:text-red-700 hover:bg-red-100 rounded transition-colors"
+              title="Delete all read notifications"
+              disabled={deletingAll}
+            >
+              {deletingAll ? <FaSpinner className="animate-spin" /> : <FaTimes />}
+            </button>
           </div>
         </div>
+        {deleteAllMsg && (
+          <div className="mt-2 text-xs text-gray-500">{deleteAllMsg}</div>
+        )}
       </div>
 
       {/* Notifications list */}

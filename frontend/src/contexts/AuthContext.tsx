@@ -104,7 +104,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // If token expired, try to refresh
           if (error.response?.status === 401 && storedTokens.refreshToken) {
             try {
-              const refreshResponse = await authAPI.refreshToken();
+              const refreshResponse = await authAPI.refreshToken(storedTokens.refreshToken);
               if (
                 refreshResponse &&
                 refreshResponse.success &&
@@ -205,41 +205,48 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const register = async (credentials: RegisterCredentials) => {
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      
-      // Send all credentials including confirmPassword (backend validation expects it)
       const registerData = {
         username: credentials.username,
         email: credentials.email,
         password: credentials.password,
         confirmPassword: credentials.confirmPassword,
       };
-      
-      const response: any = await authAPI.register(registerData);
-    
-      
+      const response = await authAPI.register(registerData);
       // The API client wraps the backend response: ApiResponse<RegisterResponse>
-      if (response) {
-        const message = response.data?.message || 'Account created successfully!';
+      if (response && response.data && response.data.success) {
+        const message = response.data.message || 'Account created successfully!';
         toast.success(message);
+        // If backend returns user and tokens, store them (rare for register, but possible)
+        if (response.data.data && response.data.data.user) {
+          // Optionally store user info for immediate login after registration
+          localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(response.data.data.user));
+          // If tokens are present (auto-login), store them
+          if (response.data.data.tokens) {
+            const { accessToken, refreshToken } = response.data.data.tokens;
+            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+            if (refreshToken) {
+              localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+            }
+            dispatch({ type: 'SET_TOKENS', payload: response.data.data.tokens });
+            dispatch({ type: 'SET_USER', payload: response.data.data.user });
+          }
+        }
+        // If verification is required, show info toast
+        if (response.data.data && response.data.data.verificationRequired) {
+          toast('Please verify your email to activate your account.', { icon: '📧' });
+        }
       } else {
         throw new Error(response?.data?.message || response?.message || 'Registration failed');
       }
     } catch (error: any) {
-      
-      // Handle different types of errors
       let message = 'Registration failed';
-      
       if (error.response?.data?.message) {
-        // Backend validation error
         message = error.response.data.message;
       } else if (error.response?.data?.errors && Array.isArray(error.response.data.errors)) {
-        // Validation errors array
         message = error.response.data.errors.map((err: any) => err.msg || err.message).join(', ');
       } else if (error.message) {
-        // Other error
         message = error.message;
       }
-      
       toast.error(message);
       throw error;
     } finally {
@@ -263,7 +270,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const storedRefreshToken = localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN);
       if (!storedRefreshToken) throw new Error('No refresh token available');
 
-      const response = await authAPI.refreshToken();
+      const response = await authAPI.refreshToken(storedRefreshToken);
 
       // The API client wraps the backend response: ApiResponse<AuthResponse>
       if (response && response.success && response.data && response.data.success) {
