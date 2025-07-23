@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { SocketAuthManager, AuthenticatedSocket } from './auth.socket';
 import { MatchmakingSocket } from './matchmaking.socket';
-import { GameSocket } from './game.socket';
+import GameSocket from './game.socket';
 import { ChatSocket } from './chat.socket';
 
 export class SocketManager {
@@ -10,6 +10,9 @@ export class SocketManager {
   private matchmakingSocket: MatchmakingSocket;
   private gameSocket: GameSocket;
   private chatSocket: ChatSocket;
+  private connectionAttempts: Map<string, { count: number; lastAttempt: Date }> = new Map();
+  private static readonly MAX_CONNECTIONS_PER_IP = 10;
+  private static readonly CONNECTION_WINDOW = 60 * 1000; // 1 minute
 
   constructor(io: SocketIOServer) {
     this.io = io;
@@ -19,6 +22,24 @@ export class SocketManager {
     this.chatSocket = new ChatSocket(io, this.authManager);
 
     this.initializeSocketHandlers();
+    
+    // Make Socket.io available globally for controllers
+    (global as any).socketIO = io;
+    
+    // Clean up connection attempts every 5 minutes
+    setInterval(() => this.cleanupConnectionAttempts(), 5 * 60 * 1000);
+  }
+
+  /**
+   * Clean up old connection attempts
+   */
+  private cleanupConnectionAttempts(): void {
+    const now = new Date();
+    for (const [ip, attempts] of this.connectionAttempts.entries()) {
+      if (now.getTime() - attempts.lastAttempt.getTime() > SocketManager.CONNECTION_WINDOW) {
+        this.connectionAttempts.delete(ip);
+      }
+    }
   }
 
   /**
@@ -27,23 +48,58 @@ export class SocketManager {
   private initializeSocketHandlers(): void {
     this.io.on('connection', (socket: Socket) => {
       const authSocket = socket as AuthenticatedSocket;
-      console.log(`👤 User connected: ${socket.id}`);
+      const clientIp = socket.handshake.address || 'unknown';
+      
+      // Check connection rate limiting
+      if (!this.checkConnectionRateLimit(clientIp)) {
+        socket.disconnect(true);
+        return;
+      }
+      
+      // Only log successful connections after authentication
+      let hasLoggedConnection = false;
 
       // Authentication handlers
       this.setupAuthHandlers(authSocket);
 
-      // Matchmaking handlers
-      this.setupMatchmakingHandlers(authSocket);
-
-      // Game handlers
-      this.setupGameHandlers(authSocket);
-
-      // Chat handlers
-      this.setupChatHandlers(authSocket);
+      // Setup authenticated event listeners
+      authSocket.on('authenticated', () => {
+        // Only setup handlers after authentication
+        this.setupMatchmakingHandlers(authSocket);
+        this.setupGameHandlers(authSocket);
+        this.setupChatHandlers(authSocket);
+      });
 
       // Connection management
       this.setupConnectionHandlers(authSocket);
     });
+  }
+
+  /**
+   * Check connection rate limiting
+   */
+  private checkConnectionRateLimit(clientIp: string): boolean {
+    const now = new Date();
+    const attempts = this.connectionAttempts.get(clientIp);
+    
+    if (attempts) {
+      // Clean old attempts
+      if (now.getTime() - attempts.lastAttempt.getTime() > SocketManager.CONNECTION_WINDOW) {
+        attempts.count = 1;
+        attempts.lastAttempt = now;
+      } else {
+        attempts.count++;
+        attempts.lastAttempt = now;
+        
+        if (attempts.count > SocketManager.MAX_CONNECTIONS_PER_IP) {
+          return false;
+        }
+      }
+    } else {
+      this.connectionAttempts.set(clientIp, { count: 1, lastAttempt: now });
+    }
+    
+    return true;
   }
 
   /**
@@ -100,77 +156,30 @@ export class SocketManager {
    * Set up game event handlers
    */
   private setupGameHandlers(socket: AuthenticatedSocket): void {
-    // Join game room
-    socket.on('join_room', (data) => {
-      this.gameSocket.handleJoinRoom(socket, data);
-    });
-
-    // Leave game room
-    socket.on('leave_room', (data) => {
-      this.gameSocket.handleLeaveRoom(socket, data);
-    });
-
-    // Player move
-    socket.on('player_move', (data) => {
-      this.gameSocket.handlePlayerMove(socket, data);
-    });
-
-    // Game surrender
-    socket.on('surrender', (data) => {
-      this.gameSocket.handleSurrender(socket, data);
-    });
-
-    // Request rematch
-    socket.on('request_rematch', (data) => {
-      this.gameSocket.handleRematchRequest(socket, data);
-    });
-
-    // Accept/decline rematch
-    socket.on('rematch_response', (data) => {
-      this.gameSocket.handleRematchResponse(socket, data);
-    });
-
-    // Get game state
-    socket.on('get_game_state', (data) => {
-      this.gameSocket.handleGetGameState(socket, data);
-    });
-
-    // Spectate game
-    socket.on('spectate_game', (data) => {
-      this.gameSocket.handleSpectateGame(socket, data);
-    });
-
-    // Stop spectating
-    socket.on('stop_spectating', (data) => {
-      this.gameSocket.handleStopSpectating(socket, data);
-    });
+    this.gameSocket.setupGameHandlers(socket);
   }
 
   /**
    * Set up chat event handlers
    */
   private setupChatHandlers(socket: AuthenticatedSocket): void {
-    // Send chat message
+    // Legacy chat events
     socket.on('chat_message', (data) => {
       this.chatSocket.handleChatMessage(socket, data);
     });
 
-    // Join chat room
     socket.on('join_chat', (data) => {
       this.chatSocket.handleJoinChat(socket, data);
     });
 
-    // Leave chat room
     socket.on('leave_chat', (data) => {
       this.chatSocket.handleLeaveChat(socket, data);
     });
 
-    // Get chat history
     socket.on('get_chat_history', (data) => {
       this.chatSocket.handleGetChatHistory(socket, data);
     });
 
-    // Typing indicators
     socket.on('typing_start', (data) => {
       this.chatSocket.handleTypingStart(socket, data);
     });
@@ -179,7 +188,6 @@ export class SocketManager {
       this.chatSocket.handleTypingStop(socket, data);
     });
 
-    // Private messages
     socket.on('private_message', (data) => {
       this.chatSocket.handlePrivateMessage(socket, data);
     });
@@ -191,8 +199,7 @@ export class SocketManager {
   private setupConnectionHandlers(socket: AuthenticatedSocket): void {
     // Handle disconnect
     socket.on('disconnect', (reason: string) => {
-      console.log(`👋 User disconnected: ${socket.id}, reason: ${reason}`);
-      
+      // Only log disconnects for authenticated users to reduce spam
       if (this.authManager.isSocketAuthenticated(socket) && socket.user?.id) {
         // Handle game disconnect
         this.gameSocket.handlePlayerDisconnect(socket.user.id);
@@ -213,8 +220,6 @@ export class SocketManager {
 
     // Handle connection errors
     socket.on('error', (error: Error) => {
-      console.error(`🚨 Socket error for ${socket.id}:`, error);
-      
       // Emit error to client
       socket.emit('socket_error', {
         message: 'Connection error occurred',
@@ -224,7 +229,7 @@ export class SocketManager {
 
     // Handle reconnection
     socket.on('reconnect_attempt', (attemptNumber: number) => {
-      console.log(`🔄 Reconnection attempt ${attemptNumber} for socket ${socket.id}`);
+      // Reconnection attempt handled silently
     });
   }
 
@@ -265,7 +270,7 @@ export class SocketManager {
     return {
       connectedSockets: this.io.sockets.sockets.size,
       authenticatedUsers: this.authManager.getOnlineUsersCount(),
-      activeGames: this.gameSocket.getActiveGamesCount(),
+      activeGames: this.gameSocket.getActiveGames().length,
       queueStats: this.matchmakingSocket.getQueueStats()
     };
   }
@@ -274,8 +279,6 @@ export class SocketManager {
    * Graceful shutdown
    */
   async shutdown(): Promise<void> {
-    console.log('🛑 Shutting down socket manager...');
-    
     // Notify all connected clients
     this.broadcastSystemMessage('Server is shutting down for maintenance', 'warning');
     
@@ -284,8 +287,6 @@ export class SocketManager {
     
     // Close all socket connections
     this.io.close();
-    
-    console.log('🔴 Socket manager shutdown complete');
   }
 }
 

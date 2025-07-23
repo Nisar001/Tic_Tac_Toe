@@ -96,7 +96,8 @@ export const refreshToken = asyncHandler(async (req: Request, res: Response) => 
     try {
       newAccessToken = AuthUtils.generateAccessToken({
         userId: user._id.toString(),
-        email: user.email
+        email: user.email,
+        tokenType: 'access'
       });
     } catch (tokenGenError) {
       logError(`Access token generation failed for user ${user._id}: ${tokenGenError}`);

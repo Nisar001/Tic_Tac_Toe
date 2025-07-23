@@ -1,802 +1,546 @@
 import { Server as SocketIOServer } from 'socket.io';
 import { AuthenticatedSocket, SocketAuthManager } from './auth.socket';
-import { GameLogic, Board, Player, MoveResult } from '../utils/game.utils';
-import { LivesManager } from '../utils/lives.utils';
+import Game from '../models/game.model';
+import User from '../models/user.model';
+import { Types } from 'mongoose';
+import { logError, logWarn, logInfo } from '../utils/logger';
 
-export interface GameRoom {
+type Player = 'X' | 'O';
+type Board = (string | null)[][];
+
+interface GameRoom {
   id: string;
+  gameId: string;
   players: {
     X: {
       userId: string;
       username: string;
       socketId: string;
-    };
+    } | null;
     O: {
       userId: string;
       username: string;
       socketId: string;
-    };
+    } | null;
   };
+  spectators: Set<string>;
   board: Board;
   currentPlayer: Player;
-  status: 'waiting' | 'active' | 'finished';
-  winner: Player | null;
-  winningLine?: number[];
+  status: 'waiting' | 'active' | 'completed' | 'abandoned';
+  winner: Player | 'draw' | null;
+  gameMode: string;
   createdAt: Date;
-  lastMoveAt?: Date;
-  moveCount: number;
-  spectators: string[]; // socket IDs of spectators
+  lastActivity: Date;
 }
 
 export class GameSocket {
-  private authManager: SocketAuthManager;
   private io: SocketIOServer;
-  private activeGames: Map<string, GameRoom> = new Map();
-  // Track cleanup timeouts to prevent memory leaks
-  private cleanupTimeouts: Map<string, NodeJS.Timeout> = new Map();
-  handleGameForfeit: any;
+  private authManager: SocketAuthManager;
+  private gameRooms: Map<string, GameRoom> = new Map();
+  private userToRoom: Map<string, string> = new Map();
 
   constructor(io: SocketIOServer, authManager: SocketAuthManager) {
     this.io = io;
     this.authManager = authManager;
   }
 
-  /**
-   * Handle joining a game room
-   */
-  handleJoinRoom(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
+  setupGameHandlers(socket: AuthenticatedSocket): void {
+    logInfo(`Game socket connected: ${socket.user?.id}`);
+
+    // Join Game
+    socket.on('joinGame', async (data) => {
+      try {
+        await this.handleJoinGame(socket, data);
+      } catch (error) {
+        logError(`Error joining game: ${error}`);
+        socket.emit('gameError', { message: 'Failed to join game' });
+      }
+    });
+
+    // Make Move
+    socket.on('makeMove', async (data) => {
+      try {
+        await this.handleMakeMove(socket, data);
+      } catch (error) {
+        logError(`Error making move: ${error}`);
+        socket.emit('gameError', { message: 'Failed to make move' });
+      }
+    });
+
+    // Leave Game
+    socket.on('leaveGame', async (data) => {
+      try {
+        await this.handleLeaveGame(socket, data);
+      } catch (error) {
+        logError(`Error leaving game: ${error}`);
+        socket.emit('gameError', { message: 'Failed to leave game' });
+      }
+    });
+
+    // Spectate Game
+    socket.on('spectateGame', async (data) => {
+      try {
+        await this.handleSpectateGame(socket, data);
+      } catch (error) {
+        logError(`Error spectating game: ${error}`);
+        socket.emit('gameError', { message: 'Failed to spectate game' });
+      }
+    });
+
+    // Forfeit Game
+    socket.on('forfeitGame', async (data) => {
+      try {
+        await this.handleForfeitGame(socket, data);
+      } catch (error) {
+        logError(`Error forfeiting game: ${error}`);
+        socket.emit('gameError', { message: 'Failed to forfeit game' });
+      }
+    });
+
+    // Handle Disconnect
+    socket.on('disconnect', () => {
+      this.handlePlayerDisconnect(socket.user?.id || '');
+    });
+  }
+
+  async handleJoinGame(socket: AuthenticatedSocket, data: any): Promise<void> {
+    const { gameId } = data;
+    if (!gameId || !socket.user?.id) return;
 
     try {
-      const { roomId } = data;
-      
-      if (!roomId) {
-        socket.emit('game_error', { message: 'Room ID is required' });
+      // Find the game
+      const game = await Game.findOne({ gameId }).populate('players.player1 players.player2');
+      if (!game) {
+        socket.emit('gameError', { message: 'Game not found' });
         return;
       }
 
-      // Join the socket room
-      socket.join(roomId);
-      
-      // Get or create game room
-      let gameRoom = this.activeGames.get(roomId);
-      
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
-      }
+      // Check if user can join
+      const userId = socket.user.id;
+      const isPlayer1 = game.players.player1?.toString() === userId;
+      const isPlayer2 = game.players.player2?.toString() === userId;
 
-      // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
-      
-      if (!isPlayerX && !isPlayerO) {
-        // Add as spectator
-        if (!gameRoom.spectators.includes(socket.id)) {
-          gameRoom.spectators.push(socket.id);
+      if (!isPlayer1 && !isPlayer2) {
+        // Add as player 2 if slot is available
+        if (!game.players.player2) {
+          game.players.player2 = new Types.ObjectId(userId);
+          game.status = 'active';
+          await game.save();
+        } else {
+          socket.emit('gameError', { message: 'Game is full' });
+          return;
         }
-        
-        socket.emit('joined_as_spectator', {
-          roomId,
-          gameState: this.getGameState(gameRoom)
-        });
-        
-        // Notify others
-        socket.to(roomId).emit('spectator_joined', {
-          spectatorId: socket.id,
-          spectatorCount: gameRoom.spectators.length
-        });
-        
-        return;
       }
 
-      // Player joined their own game
-      const playerSymbol = isPlayerX ? 'X' : 'O';
-      
-      socket.emit('room_joined', {
-        roomId,
-        playerSymbol,
-        gameState: this.getGameState(gameRoom)
+      // Join socket room
+      socket.join(gameId);
+      this.userToRoom.set(userId, gameId);
+
+      // Create or update game room
+      let gameRoom = this.gameRooms.get(gameId);
+      if (!gameRoom) {
+        const user = await User.findById(userId);
+        gameRoom = {
+          id: gameId,
+          gameId,
+          players: {
+            X: isPlayer1 ? {
+              userId: userId,
+              username: user?.username || 'Player',
+              socketId: socket.id
+            } : null,
+            O: isPlayer2 ? {
+              userId: userId,
+              username: user?.username || 'Player',
+              socketId: socket.id
+            } : null
+          },
+          spectators: new Set(),
+          board: game.board,
+          currentPlayer: game.currentPlayer,
+          status: game.status,
+          winner: null,
+          gameMode: game.gameMode || 'classic',
+          createdAt: game.createdAt,
+          lastActivity: new Date()
+        };
+        this.gameRooms.set(gameId, gameRoom);
+      } else {
+        // Update player info
+        const user = await User.findById(userId);
+        const playerData = {
+          userId: userId,
+          username: user?.username || 'Player',
+          socketId: socket.id
+        };
+
+        if (isPlayer1) {
+          gameRoom.players.X = playerData;
+        } else if (isPlayer2) {
+          gameRoom.players.O = playerData;
+        }
+      }
+
+      // Emit join success
+      socket.emit('gameJoined', {
+        gameId,
+        room: gameRoom,
+        player: {
+          id: userId
+        }
       });
 
-      // Notify opponent
-      socket.to(roomId).emit('opponent_joined', {
-        playerId: socket.user?.id ?? 'unknown',
-        username: socket.user?.username ?? 'unknown'
+      // Notify other players
+      socket.to(gameId).emit('playerJoined', {
+        player: {
+          id: userId,
+          username: socket.user.username
+        }
       });
 
-      console.log(`🎮 Player ${socket.user?.id ?? 'unknown'} joined game room ${roomId} as ${playerSymbol}`);
+      logInfo(`User ${userId} joined game ${gameId}`);
 
     } catch (error) {
-      console.error('Join room error:', error);
-      socket.emit('game_error', { message: 'Failed to join room' });
+      logError(`Error in handleJoinGame: ${error}`);
+      socket.emit('gameError', { message: 'Failed to join game' });
     }
   }
 
-  /**
-   * Handle leaving a game room
-   */
-  handleLeaveRoom(socket: AuthenticatedSocket, data: { roomId: string }) {
-    try {
-      const { roomId } = data;
-      
-      if (!roomId) {
-        return;
-      }
+  async handleMakeMove(socket: AuthenticatedSocket, data: any): Promise<void> {
+    const { gameId, row, col } = data;
+    const userId = socket.user?.id;
 
-      socket.leave(roomId);
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (gameRoom) {
-        // Remove from spectators if applicable
-        gameRoom.spectators = gameRoom.spectators.filter(id => id !== socket.id);
-        
-        // Notify others
-        socket.to(roomId).emit('player_left', {
-          playerId: socket.user?.id,
-          spectatorCount: gameRoom.spectators.length
-        });
-      }
-
-      console.log(`🚪 Player ${socket.user?.id} left game room ${roomId}`);
-
-    } catch (error) {
-      console.error('Leave room error:', error);
-    }
-  }
-
-  /**
-   * Handle player move
-   */
-  handlePlayerMove(socket: AuthenticatedSocket, data: { roomId: string; position: number }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
+    if (!gameId || !userId || row === undefined || col === undefined) {
+      socket.emit('gameError', { message: 'Invalid move data' });
       return;
     }
 
     try {
-      const { roomId, position } = data;
-      
-      if (!roomId || position === undefined) {
-        socket.emit('game_error', { message: 'Room ID and position are required' });
-        return;
-      }
-
-      const gameRoom = this.activeGames.get(roomId);
+      const gameRoom = this.gameRooms.get(gameId);
       if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
+        socket.emit('gameError', { message: 'Game room not found' });
         return;
       }
 
-      // Check if game is active
-      if (gameRoom.status !== 'active') {
-        socket.emit('game_error', { message: 'Game is not active' });
+      // Check if it's the player's turn
+      let playerSymbol: Player | null = null;
+      if (gameRoom.players.X?.userId === userId) {
+        playerSymbol = 'X';
+      } else if (gameRoom.players.O?.userId === userId) {
+        playerSymbol = 'O';
+      }
+
+      if (!playerSymbol) {
+        socket.emit('gameError', { message: 'You are not a player in this game' });
         return;
       }
 
-      // Determine player symbol
-      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
-      
-      if (!isPlayerX && !isPlayerO) {
-        socket.emit('game_error', { message: 'You are not a player in this game' });
-        return;
-      }
-
-      const playerSymbol: Player = isPlayerX ? 'X' : 'O';
-
-      // Check if it's player's turn
       if (gameRoom.currentPlayer !== playerSymbol) {
-        socket.emit('game_error', { message: 'Not your turn' });
+        socket.emit('gameError', { message: 'Not your turn' });
         return;
       }
 
-      // Validate and make move
-      const moveResult = GameLogic.makeMove(gameRoom.board, position, playerSymbol);
-      
-      if (!moveResult.isValid) {
-        socket.emit('game_error', { message: 'Invalid move' });
+      // Validate move
+      if (row < 0 || row > 2 || col < 0 || col > 2 || gameRoom.board[row][col] !== null) {
+        socket.emit('gameError', { message: 'Invalid move' });
         return;
       }
 
-      // Update game state
-      gameRoom.board = moveResult.board;
-      gameRoom.lastMoveAt = new Date();
-      gameRoom.moveCount++;
-      
-      // Check game result
-      if (moveResult.result === 'win') {
-        gameRoom.status = 'finished';
-        gameRoom.winner = moveResult.winner;
-        gameRoom.winningLine = moveResult.winningLine;
-        
-        // Handle game end
-        this.handleGameEnd(gameRoom, 'win');
-        
-      } else if (moveResult.result === 'draw') {
-        gameRoom.status = 'finished';
-        gameRoom.winner = null;
-        
-        // Handle game end
-        this.handleGameEnd(gameRoom, 'draw');
-        
-      } else {
-        // Switch turns
-        gameRoom.currentPlayer = GameLogic.getNextPlayer(gameRoom.currentPlayer);
+      // Make the move
+      gameRoom.board[row][col] = playerSymbol;
+      gameRoom.lastActivity = new Date();
+
+      // Update database
+      const game = await Game.findOne({ gameId });
+      if (game) {
+        game.board = gameRoom.board;
+        game.moves.push({
+          player: new Types.ObjectId(userId),
+          position: { row, col },
+          symbol: playerSymbol,
+          timestamp: new Date()
+        });
+
+        // Check for winner
+        const winner = this.checkWinner(gameRoom.board);
+        if (winner) {
+          gameRoom.winner = winner;
+          gameRoom.status = 'completed';
+          game.status = 'completed';
+          game.winner = winner === 'draw' ? undefined : 
+                       (winner === 'X' ? game.players.player1 : game.players.player2);
+          game.result = winner === 'draw' ? 'draw' : 'win';
+          game.endedAt = new Date();
+
+          // Update player stats
+          await this.updatePlayerStats(game, winner);
+        } else {
+          // Switch turns
+          gameRoom.currentPlayer = gameRoom.currentPlayer === 'X' ? 'O' : 'X';
+          game.currentPlayer = gameRoom.currentPlayer;
+        }
+
+        await game.save();
       }
 
-      // Broadcast move to all in room
-      this.io.to(roomId).emit('move_made', {
-        position,
-        player: playerSymbol,
+      // Emit move result to all players in the room
+      this.io.to(gameId).emit('moveResult', {
+        success: true,
+        gameId,
+        move: {
+          row,
+          col,
+          symbol: playerSymbol,
+          player: userId,
+          timestamp: new Date()
+        },
         board: gameRoom.board,
         currentPlayer: gameRoom.currentPlayer,
-        moveCount: gameRoom.moveCount,
-        gameStatus: gameRoom.status,
         winner: gameRoom.winner,
-        winningLine: gameRoom.winningLine,
-        timestamp: new Date()
+        status: gameRoom.status
       });
 
-      console.log(`🎯 Move made in room ${roomId}: Player ${playerSymbol} at position ${position}`);
-
-    } catch (error) {
-      console.error('Player move error:', error);
-      socket.emit('game_error', { message: 'Failed to make move' });
-    }
-  }
-
-  /**
-   * Handle game surrender
-   */
-  handleSurrender(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
-
-    try {
-      const { roomId } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
-      }
-
-      // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
-      
-      if (!isPlayerX && !isPlayerO) {
-        socket.emit('game_error', { message: 'You are not a player in this game' });
-        return;
-      }
-
-      const surrenderingPlayer: Player = isPlayerX ? 'X' : 'O';
-      const winner: Player = surrenderingPlayer === 'X' ? 'O' : 'X';
-
-      // Update game state
-      gameRoom.status = 'finished';
-      gameRoom.winner = winner;
-
-      // Broadcast surrender
-      this.io.to(roomId).emit('game_surrendered', {
-        surrenderingPlayer,
-        winner,
-        gameState: this.getGameState(gameRoom)
-      });
-
-      // Handle game end
-      this.handleGameEnd(gameRoom, 'surrender');
-
-      console.log(`🏳️ Player ${surrenderingPlayer} surrendered in room ${roomId}`);
-
-    } catch (error) {
-      console.error('Surrender error:', error);
-      socket.emit('game_error', { message: 'Failed to surrender' });
-    }
-  }
-
-  /**
-   * Handle rematch request
-   */
-  handleRematchRequest(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
-
-    try {
-      const { roomId } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
-      }
-
-      // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
-      
-      if (!isPlayerX && !isPlayerO) {
-        socket.emit('game_error', { message: 'You are not a player in this game' });
-        return;
-      }
-
-      const requestingPlayer: Player = isPlayerX ? 'X' : 'O';
-
-      // Broadcast rematch request to opponent
-      socket.to(roomId).emit('rematch_requested', {
-        requestingPlayer,
-        message: `${socket.user?.username} requested a rematch`
-      });
-
-      socket.emit('rematch_request_sent', {
-        message: 'Rematch request sent to opponent'
-      });
-
-      console.log(`🔄 Rematch requested by ${requestingPlayer} in room ${roomId}`);
-
-    } catch (error) {
-      console.error('Rematch request error:', error);
-      socket.emit('game_error', { message: 'Failed to request rematch' });
-    }
-  }
-
-  /**
-   * Handle rematch acceptance
-   */
-  handleRematchAccept(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
-
-    try {
-      const { roomId } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
-      }
-
-      // Reset game state for rematch
-      gameRoom.board = GameLogic.createEmptyBoard();
-      gameRoom.currentPlayer = 'X';
-      gameRoom.status = 'active';
-      gameRoom.winner = null;
-      gameRoom.winningLine = undefined;
-      gameRoom.moveCount = 0;
-      gameRoom.lastMoveAt = undefined;
-
-      // Broadcast new game start
-      this.io.to(roomId).emit('rematch_accepted', {
-        gameState: this.getGameState(gameRoom),
-        message: 'Rematch started!'
-      });
-
-      console.log(`🔄 Rematch accepted in room ${roomId}`);
-
-    } catch (error) {
-      console.error('Rematch accept error:', error);
-      socket.emit('game_error', { message: 'Failed to accept rematch' });
-    }
-  }
-
-  /**
-   * Handle rematch response
-   */
-  handleRematchResponse(socket: AuthenticatedSocket, data: { roomId: string; accept: boolean }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
-
-    try {
-      const { roomId, accept } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
-      }
-
-      // Check if player is part of this game
-      const isPlayerX = gameRoom.players.X.userId === socket.user?.id;
-      const isPlayerO = gameRoom.players.O.userId === socket.user?.id;
-      
-      if (!isPlayerX && !isPlayerO) {
-        socket.emit('game_error', { message: 'You are not a player in this game' });
-        return;
-      }
-
-      if (accept) {
-        // Reset game for rematch
-        this.resetGameForRematch(gameRoom);
-        
-        this.io.to(roomId).emit('rematch_accepted', {
-          roomId,
-          gameState: this.getGameState(gameRoom)
+      if (gameRoom.winner) {
+        this.io.to(gameId).emit('gameOver', {
+          gameId,
+          winner: gameRoom.winner,
+          board: gameRoom.board
         });
-        
-        console.log(`🔄 Rematch accepted in room ${roomId}`);
-      } else {
-        this.io.to(roomId).emit('rematch_declined', {
-          roomId,
-          message: 'Rematch declined'
-        });
-        
-        console.log(`❌ Rematch declined in room ${roomId}`);
       }
 
     } catch (error) {
-      console.error('Rematch response error:', error);
-      socket.emit('game_error', { message: 'Failed to process rematch response' });
+      logError(`Error in handleMakeMove: ${error}`);
+      socket.emit('gameError', { message: 'Failed to make move' });
     }
   }
 
-  /**
-   * Handle get game state
-   */
-  handleGetGameState(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
+  async handleLeaveGame(socket: AuthenticatedSocket, data: any): Promise<void> {
+    const { gameId } = data;
+    const userId = socket.user?.id;
+
+    if (!gameId || !userId) return;
 
     try {
-      const { roomId } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
+      const gameRoom = this.gameRooms.get(gameId);
+      if (gameRoom) {
+        // Remove player from game room
+        if (gameRoom.players.X?.userId === userId) {
+          gameRoom.players.X = null;
+        } else if (gameRoom.players.O?.userId === userId) {
+          gameRoom.players.O = null;
+        }
+
+        // If no players left, remove the room
+        if (!gameRoom.players.X && !gameRoom.players.O && gameRoom.spectators.size === 0) {
+          this.gameRooms.delete(gameId);
+        }
       }
 
-      socket.emit('game_state', {
-        roomId,
-        gameState: this.getGameState(gameRoom)
+      // Leave socket room
+      socket.leave(gameId);
+      this.userToRoom.delete(userId);
+
+      // Notify other players
+      socket.to(gameId).emit('playerLeft', {
+        player: {
+          id: userId
+        }
       });
 
+      logInfo(`User ${userId} left game ${gameId}`);
+
     } catch (error) {
-      console.error('Get game state error:', error);
-      socket.emit('game_error', { message: 'Failed to get game state' });
+      logError(`Error in handleLeaveGame: ${error}`);
     }
   }
 
-  /**
-   * Handle spectate game
-   */
-  handleSpectateGame(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      socket.emit('auth_required', { message: 'Authentication required for this action' });
-      return;
-    }
+  async handleSpectateGame(socket: AuthenticatedSocket, data: any): Promise<void> {
+    const { gameId } = data;
+    const userId = socket.user?.id;
+
+    if (!gameId || !userId) return;
 
     try {
-      const { roomId } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
-      if (!gameRoom) {
-        socket.emit('game_error', { message: 'Game room not found' });
-        return;
-      }
-
-      // Check if already a player in this game
-      const isPlayer = gameRoom.players.X.userId === socket.user?.id || 
-                      gameRoom.players.O.userId === socket.user?.id;
-      
-      if (isPlayer) {
-        socket.emit('game_error', { message: 'You are already a player in this game' });
+      const game = await Game.findOne({ gameId });
+      if (!game) {
+        socket.emit('gameError', { message: 'Game not found' });
         return;
       }
 
       // Join as spectator
-      socket.join(roomId);
+      socket.join(gameId);
       
-      if (!gameRoom.spectators.includes(socket.id)) {
-        gameRoom.spectators.push(socket.id);
+      const gameRoom = this.gameRooms.get(gameId);
+      if (gameRoom) {
+        gameRoom.spectators.add(userId);
       }
 
-      socket.emit('spectating_started', {
-        roomId,
-        gameState: this.getGameState(gameRoom),
-        spectatorCount: gameRoom.spectators.length
+      socket.emit('spectatingGame', {
+        gameId,
+        gameState: {
+          board: game.board,
+          currentPlayer: game.currentPlayer,
+          status: game.status,
+          winner: game.winner
+        }
       });
 
-      // Notify others
-      socket.to(roomId).emit('spectator_joined', {
-        spectatorId: socket.id,
-        spectatorCount: gameRoom.spectators.length
-      });
-
-      console.log(`👁️ User ${socket.user?.id} started spectating room ${roomId}`);
+      logInfo(`User ${userId} started spectating game ${gameId}`);
 
     } catch (error) {
-      console.error('Spectate game error:', error);
-      socket.emit('game_error', { message: 'Failed to spectate game' });
+      logError(`Error in handleSpectateGame: ${error}`);
+      socket.emit('gameError', { message: 'Failed to spectate game' });
     }
   }
 
-  /**
-   * Handle stop spectating
-   */
-  handleStopSpectating(socket: AuthenticatedSocket, data: { roomId: string }) {
-    if (!this.authManager.isSocketAuthenticated(socket)) {
-      return;
-    }
+  async handleForfeitGame(socket: AuthenticatedSocket, data: any): Promise<void> {
+    const { gameId } = data;
+    const userId = socket.user?.id;
+
+    if (!gameId || !userId) return;
 
     try {
-      const { roomId } = data;
-      
-      const gameRoom = this.activeGames.get(roomId);
+      const gameRoom = this.gameRooms.get(gameId);
       if (!gameRoom) {
+        socket.emit('gameError', { message: 'Game room not found' });
         return;
       }
 
-      // Remove from spectators
-      const index = gameRoom.spectators.indexOf(socket.id);
-      if (index > -1) {
-        gameRoom.spectators.splice(index, 1);
+      const isPlayerX = gameRoom.players.X?.userId === userId;
+      const isPlayerO = gameRoom.players.O?.userId === userId;
+
+      if (!isPlayerX && !isPlayerO) {
+        socket.emit('gameError', { message: 'You are not a player in this game' });
+        return;
       }
 
-      // Leave room
-      socket.leave(roomId);
+      // Determine winner (opponent)
+      const winner = isPlayerX ? 'O' : 'X';
+      gameRoom.winner = winner;
+      gameRoom.status = 'completed';
 
-      socket.emit('spectating_stopped', {
-        roomId
+      // Update database
+      const game = await Game.findOne({ gameId });
+      if (game) {
+        game.status = 'completed';
+        game.winner = winner === 'X' ? game.players.player1 : game.players.player2;
+        game.result = 'win';
+        game.endedAt = new Date();
+        await game.save();
+
+        // Update player stats
+        await this.updatePlayerStats(game, winner);
+      }
+
+      // Notify all players
+      this.io.to(gameId).emit('gameOver', {
+        gameId,
+        winner,
+        reason: 'forfeit',
+        forfeiter: userId
       });
 
-      // Notify others
-      socket.to(roomId).emit('spectator_left', {
-        spectatorId: socket.id,
-        spectatorCount: gameRoom.spectators.length
-      });
-
-      console.log(`👁️ User ${socket.user?.id} stopped spectating room ${roomId}`);
+      logInfo(`Game ${gameId} forfeited by user ${userId}`);
 
     } catch (error) {
-      console.error('Stop spectating error:', error);
+      logError(`Error in handleForfeitGame: ${error}`);
     }
   }
 
-  /**
-   * Create a new game room
-   */
-  createGameRoom(roomId: string, player1: any, player2: any): GameRoom {
-    const gameRoom: GameRoom = {
-      id: roomId,
-      players: {
-        X: {
-          userId: player1.userId.toString(),
-          username: player1.username,
-          socketId: player1.socketId
-        },
-        O: {
-          userId: player2.userId.toString(),
-          username: player2.username,
-          socketId: player2.socketId
-        }
-      },
-      board: GameLogic.createEmptyBoard(),
-      currentPlayer: 'X',
-      status: 'active',
-      winner: null,
-      createdAt: new Date(),
-      moveCount: 0,
-      spectators: []
-    };
+  handlePlayerDisconnect(userId: string): void {
+    const gameId = this.userToRoom.get(userId);
+    if (!gameId) return;
 
-    this.activeGames.set(roomId, gameRoom);
-    return gameRoom;
+    logInfo(`Game socket disconnected: ${userId}`);
+    
+    // Handle cleanup when player disconnects
+    // Could implement reconnection logic here
   }
 
-  /**
-   * Create a custom game
-   */
-  createCustomGame(gameConfig: { roomId: string; players: { X: string; O: string } }): GameRoom {
-    const { roomId, players } = gameConfig;
-
-    if (this.activeGames.has(roomId)) {
-      throw new Error('Game room already exists');
+  private checkWinner(board: Board): Player | 'draw' | null {
+    // Check rows
+    for (let i = 0; i < 3; i++) {
+      if (board[i][0] && board[i][0] === board[i][1] && board[i][1] === board[i][2]) {
+        return board[i][0] as Player;
+      }
     }
 
-    const newGame: GameRoom = {
-      id: roomId,
-      players: {
-        X: { userId: players.X, username: 'PlayerX', socketId: '' },
-        O: { userId: players.O, username: 'PlayerO', socketId: '' }
-      },
-      board: [],
-      currentPlayer: 'X',
-      status: 'waiting',
-      winner: null,
-      createdAt: new Date(),
-      moveCount: 0,
-      spectators: []
-    };
+    // Check columns
+    for (let i = 0; i < 3; i++) {
+      if (board[0][i] && board[0][i] === board[1][i] && board[1][i] === board[2][i]) {
+        return board[0][i] as Player;
+      }
+    }
 
-    this.activeGames.set(roomId, newGame);
-    return newGame;
-  }
+    // Check diagonals
+    if (board[0][0] && board[0][0] === board[1][1] && board[1][1] === board[2][2]) {
+      return board[0][0] as Player;
+    }
+    if (board[0][2] && board[0][2] === board[1][1] && board[1][1] === board[2][0]) {
+      return board[0][2] as Player;
+    }
 
-  /**
-   * Get user game stats
-   */
-  getUserGameStats(userId: string): { gamesPlayed: number; wins: number; losses: number } {
-    let gamesPlayed = 0;
-    let wins = 0;
-    let losses = 0;
-
-    this.activeGames.forEach(game => {
-      if (game.players.X.userId === userId || game.players.O.userId === userId) {
-        gamesPlayed++;
-        if (game.winner && game.winner === userId) {
-          wins++;
-        } else if (game.status === 'finished' && game.winner !== userId) {
-          losses++;
+    // Check for draw
+    let hasEmptyCell = false;
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        if (board[i][j] === null) {
+          hasEmptyCell = true;
+          break;
         }
       }
-    });
+      if (hasEmptyCell) break;
+    }
 
-    return { gamesPlayed, wins, losses };
+    return hasEmptyCell ? null : 'draw';
   }
 
-  /**
-   * Get game state for client
-   */
-  private getGameState(gameRoom: GameRoom) {
-    return {
-      roomId: gameRoom.id,
-      board: gameRoom.board,
-      currentPlayer: gameRoom.currentPlayer,
-      status: gameRoom.status,
-      winner: gameRoom.winner,
-      winningLine: gameRoom.winningLine,
-      moveCount: gameRoom.moveCount,
-      players: gameRoom.players,
-      spectatorCount: gameRoom.spectators.length,
-      createdAt: gameRoom.createdAt,
-      lastMoveAt: gameRoom.lastMoveAt
-    };
-  }
-
-  /**
-   * Handle game end
-   */
-  private async handleGameEnd(gameRoom: GameRoom, endType: 'win' | 'draw' | 'surrender') {
+  private async updatePlayerStats(game: any, winner: Player | 'draw'): Promise<void> {
     try {
-      // TODO: Save game to database
-      // TODO: Update player stats
-      // TODO: Award XP and update levels
-      // TODO: Consume lives
-
-      console.log(`🏁 Game ended in room ${gameRoom.id}: ${endType}`);
-      
-      // Clear any existing cleanup timeout
-      const existingTimeout = this.cleanupTimeouts.get(gameRoom.id);
-      if (existingTimeout) {
-        clearTimeout(existingTimeout);
-      }
-      
-      // Clean up game room after some time
-      const cleanupTimeout = setTimeout(() => {
-        this.activeGames.delete(gameRoom.id);
-        this.cleanupTimeouts.delete(gameRoom.id);
-        console.log(`🧹 Cleaned up game room ${gameRoom.id}`);
-      }, 300000); // 5 minutes
-
-      // Store the timeout for tracking
-      this.cleanupTimeouts.set(gameRoom.id, cleanupTimeout);
-
-    } catch (error) {
-      console.error('Game end handling error:', error);
-    }
-  }
-
-  /**
-   * Handle player disconnect
-   */
-  handlePlayerDisconnect(socketId: string, userId?: string) {
-    try {
-      // Find games where this player is involved
-      for (const [roomId, gameRoom] of this.activeGames) {
-        const isPlayerX = gameRoom.players.X.socketId === socketId;
-        const isPlayerO = gameRoom.players.O.socketId === socketId;
-        const isSpectator = gameRoom.spectators.includes(socketId);
-
-        if (isPlayerX || isPlayerO) {
-          // Player disconnected from active game
-          const disconnectedPlayer = isPlayerX ? 'X' : 'O';
-          
-          if (gameRoom.status === 'active') {
-            // Pause game or end it depending on policy
-            gameRoom.status = 'waiting';
-            
-            this.io.to(roomId).emit('player_disconnected', {
-              disconnectedPlayer,
-              message: 'Opponent disconnected. Game paused.',
-              gameState: this.getGameState(gameRoom)
-            });
+      if (game.players.player1) {
+        const player1 = await User.findById(game.players.player1);
+        if (player1) {
+          player1.stats.gamesPlayed += 1;
+          if (winner === 'X') {
+            player1.stats.wins += 1;
+          } else if (winner === 'O') {
+            player1.stats.losses += 1;
+          } else {
+            player1.stats.draws += 1;
           }
-          
-          // Clean up any pending cleanup timeout if game should end
-          const cleanupTimeout = this.cleanupTimeouts.get(roomId);
-          if (cleanupTimeout) {
-            clearTimeout(cleanupTimeout);
-            this.cleanupTimeouts.delete(roomId);
-          }
-          
-          console.log(`📡 Player ${disconnectedPlayer} disconnected from game ${roomId}`);
-        }
-
-        if (isSpectator) {
-          // Remove spectator
-          gameRoom.spectators = gameRoom.spectators.filter(id => id !== socketId);
-          
-          this.io.to(roomId).emit('spectator_left', {
-            spectatorCount: gameRoom.spectators.length
-          });
+          player1.stats.winRate = (player1.stats.wins / player1.stats.gamesPlayed) * 100;
+          await player1.save();
         }
       }
 
+      if (game.players.player2) {
+        const player2 = await User.findById(game.players.player2);
+        if (player2) {
+          player2.stats.gamesPlayed += 1;
+          if (winner === 'O') {
+            player2.stats.wins += 1;
+          } else if (winner === 'X') {
+            player2.stats.losses += 1;
+          } else {
+            player2.stats.draws += 1;
+          }
+          player2.stats.winRate = (player2.stats.wins / player2.stats.gamesPlayed) * 100;
+          await player2.save();
+        }
+      }
     } catch (error) {
-      console.error('Handle player disconnect error:', error);
+      logError(`Error updating player stats: ${error}`);
     }
   }
 
-  /**
-   * Reset game for rematch
-   */
-  private resetGameForRematch(gameRoom: GameRoom): void {
-    gameRoom.board = Array(9).fill(null);
-    gameRoom.currentPlayer = 'X';
-    gameRoom.status = 'active';
-    gameRoom.winner = null;
-    gameRoom.winningLine = undefined;
-    gameRoom.lastMoveAt = new Date();
-    gameRoom.moveCount = 0;
-  }
-
-  /**
-   * Get active games count
-   */
-  getActiveGamesCount(): number {
-    return this.activeGames.size;
-  }
-
-  /**
-   * Get active games list
-   */
   getActiveGames(): GameRoom[] {
-    return Array.from(this.activeGames.values());
+    return Array.from(this.gameRooms.values());
   }
 
-  /**
-   * Clean up finished games
-   */
-  cleanupFinishedGames(): number {
-    let cleanedCount = 0;
-    const now = new Date();
-    
-    for (const [roomId, gameRoom] of this.activeGames) {
-      if (gameRoom.status === 'finished') {
-        const timeSinceEnd = now.getTime() - (gameRoom.lastMoveAt?.getTime() || 0);
-        
-        // Clean up games finished more than 30 minutes ago
-        if (timeSinceEnd > 1800000) {
-          this.activeGames.delete(roomId);
-          cleanedCount++;
-        }
-      }
-    }
-    
-    return cleanedCount;
+  getGameRoom(gameId: string): GameRoom | undefined {
+    return this.gameRooms.get(gameId);
   }
 }
+
+export { GameRoom };
+export default GameSocket;

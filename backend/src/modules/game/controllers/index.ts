@@ -1,16 +1,37 @@
-export { getGameState, getGameStateRateLimit } from './getGameState.controller';
-export { getActiveGames } from './getActiveGames.controller';
-export { createCustomGame, createCustomGameRateLimit } from './createCustomGame.controller';
+// Game room management controllers
+export { 
+  createGameRoom, 
+  joinGameRoom, 
+  getAvailableRooms, 
+  getGameRoom, 
+  leaveGameRoom 
+} from './gameRoom.controller';
+
+// Game move controllers
+export { 
+  makeGameMove, 
+  forfeitGame, 
+  getGameState 
+} from './gameMove.controller';
+
+// Additional game state controllers
+export { 
+  getGameState as getDetailedGameState,
+  getUserActiveGames 
+} from './getGameState.controller';
+
+// User statistics controller
 export { getUserGameStats } from './getUserGameStats.controller';
-export { getLeaderboard, getLeaderboardRateLimit } from './getLeaderboard.controller';
-export { forfeitGame, forfeitGameRateLimit } from './forfeitGame.controller';
+
+// Leaderboard controller
+export { getLeaderboard } from './getLeaderboard.controller';
+
+// Matchmaking controllers
 export { 
   joinQueue, 
   leaveQueue, 
   getMatchmakingStatus, 
   getQueueStats, 
   forceMatch, 
-  cleanupQueue,
-  matchmakingRateLimit 
+  cleanupQueue
 } from './matchmaking.controller';
-export { makeMove } from './makeMove.controller';

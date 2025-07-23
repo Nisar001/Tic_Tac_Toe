@@ -63,3 +63,5 @@ export const FriendRequests: React.FC = () => {
     </div>
   );
 };
+
+

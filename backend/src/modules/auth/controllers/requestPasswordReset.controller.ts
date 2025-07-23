@@ -68,7 +68,7 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
     try {
       await EmailService.sendPasswordResetEmail(sanitizedEmail, resetToken);
     } catch (emailErr) {
-      console.error('Password reset email failed:', emailErr);
+
 
       user.passwordResetToken = undefined;
       user.passwordResetTokenExpiry = undefined;

@@ -47,13 +47,13 @@ export class EmailService {
 
       this.transporter.verify((error: any, success: any) => {
         if (error) {
-          console.error('Email transporter verification failed:', error);
+
         } else {
-          console.log('Email transporter verified and ready.');
+
         }
       });
     } catch (error) {
-      console.error('Error initializing email transporter:', error);
+
       throw new Error('Email service failed to initialize.');
     }
   }
@@ -146,9 +146,9 @@ export class EmailService {
       const result = await this.transporter.sendMail(mailOptions);
       this.emailQueue.set(options.to.toLowerCase(), Date.now());
 
-      console.log(`Email sent to ${options.to}, messageId: ${result.messageId}`);
+
     } catch (error: any) {
-      console.error('Error sending email:', error);
+
       throw new Error(`Send email failed: ${error.message || 'Unknown error'}`);
     }
   }

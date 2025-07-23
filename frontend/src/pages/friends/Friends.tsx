@@ -1,16 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useFriendsContext } from '../../contexts/FriendsContext';
+import { useAPIManager } from '../../contexts/APIManagerContext';
 import { FriendsList } from '../../components/friends/FriendsList';
 import { FriendRequests } from '../../components/friends/FriendRequests';
-
 import { AddFriend } from '../../components/friends/AddFriend';
 import { BlockedUsers } from '../../components/friends/BlockedUsers';
-import { FaUsers, FaUserPlus, FaBell, FaBan } from 'react-icons/fa';
-
+import { FaUsers, FaUserPlus, FaBell, FaBan, FaRedo } from 'react-icons/fa';
 
 export const Friends: React.FC = () => {
   const { state, loadFriends, loadFriendRequests } = useFriendsContext();
+  const { loading, errors, retryCount, retry, resetAPIState } = useAPIManager();
   const [activeTab, setActiveTab] = useState<'friends' | 'requests' | 'add' | 'blocked'>('friends');
   const [search, setSearch] = useState('');
 
@@ -18,7 +18,6 @@ export const Friends: React.FC = () => {
     loadFriends();
     loadFriendRequests();
   }, [loadFriends, loadFriendRequests]);
-
 
   const tabs = [
     {
@@ -44,7 +43,6 @@ export const Friends: React.FC = () => {
       icon: FaBan,
     },
   ];
-
 
   // Enhanced empty states
   const renderContent = () => {
@@ -87,6 +85,45 @@ export const Friends: React.FC = () => {
           />
         )}
       </div>
+
+      {/* API Manager Status & Retry Section */}
+      {(errors.loadFriends || loading.loadFriends || errors.sendFriendRequest) && (
+        <div className="bg-yellow-50 border-b border-yellow-200 p-4">
+          <div className="flex flex-wrap gap-3 items-center">
+            {loading.loadFriends && (
+              <div className="flex items-center text-sm text-blue-600">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                Loading friends...
+              </div>
+            )}
+            
+            {errors.loadFriends && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-red-600">Failed to load friends</span>
+                <button
+                  onClick={() => retry('loadFriends', () => loadFriends(true))}
+                  className="flex items-center gap-1 px-3 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors text-sm"
+                >
+                  <FaRedo className="h-3 w-3" />
+                  Retry ({retryCount.loadFriends || 0})
+                </button>
+              </div>
+            )}
+            
+            {errors.sendFriendRequest && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-red-600">Friend request failed</span>
+                <button
+                  onClick={() => resetAPIState('sendFriendRequest')}
+                  className="px-3 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="border-b border-gray-200 bg-white sticky top-0 z-10">
@@ -145,3 +182,5 @@ export const Friends: React.FC = () => {
     </div>
   );
 };
+
+

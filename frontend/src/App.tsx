@@ -2,12 +2,14 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { APIManagerProvider } from './contexts/APIManagerContext';
 import { SocketProvider } from './contexts/SocketContext';
 import { GameProvider } from './contexts/GameContext';
 import { ChatProvider } from './contexts/ChatContext';
 import { FriendsProvider } from './contexts/FriendsContext';
 import { NotificationsProvider } from './contexts/NotificationsContext';
 import { MatchmakingProvider } from './contexts/MatchmakingContext';
+import { AdminProvider } from './contexts/AdminContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 
@@ -33,12 +35,14 @@ import Settings from './pages/Settings';
 function App() {
   return (
     <AuthProvider>
-      <SocketProvider>
-        <GameProvider>
-          <ChatProvider>
-            <FriendsProvider>
-              <NotificationsProvider>
-                <MatchmakingProvider>
+      <APIManagerProvider>
+        <SocketProvider>
+          <GameProvider>
+            <ChatProvider>
+              <FriendsProvider>
+                <NotificationsProvider>
+                  <MatchmakingProvider>
+                    <AdminProvider>
                 <Router>
                   <div className="App">
               <Toaster
@@ -168,14 +172,18 @@ function App() {
               </Routes>
             </div>
           </Router>
-        </MatchmakingProvider>
-      </NotificationsProvider>
-    </FriendsProvider>
-    </ChatProvider>
-  </GameProvider>
-</SocketProvider>
-</AuthProvider>
+                    </AdminProvider>
+                  </MatchmakingProvider>
+                </NotificationsProvider>
+              </FriendsProvider>
+            </ChatProvider>
+          </GameProvider>
+        </SocketProvider>
+      </APIManagerProvider>
+    </AuthProvider>
   );
 }
 
 export default App;
+
+

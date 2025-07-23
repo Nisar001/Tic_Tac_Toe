@@ -81,10 +81,10 @@ export interface Game {
   board: CellValue[][];
   currentPlayer: 'X' | 'O';
   players: {
-    player1: string | GamePlayer;
+    player1: string | GamePlayer | null;
     player2?: string | GamePlayer | null;
   };
-  winner?: string;
+  winner?: string | null;
   winCondition?: WinCondition;
   result?: 'win' | 'draw' | 'abandoned' | null;
   moves: GameMove[];
@@ -266,7 +266,8 @@ export interface GameCreateRequest {
   inviteCode?: string;
 }
 
-export interface GameMoveRequest {
+// Use MakeMoveRequest instead to avoid conflicts
+export interface GameMoveData {
   roomId: string;
   position: Position;
 }
@@ -276,6 +277,7 @@ export interface SendMessageRequest {
   type?: 'text' | 'system';
   roomId?: string;
   gameId?: string;
+  messageType?: string;
 }
 
 // API Response type
@@ -364,26 +366,44 @@ export interface UpdateProfileRequest {
   preferences?: Partial<UserPreferences>;
 }
 
-// Game API Types
+// Game API Types - Updated to match backend structure
 export interface CreateGameRequest {
-  gameConfig: {
-    gameMode?: 'classic' | 'blitz' | 'ranked' | 'custom';
-    isPrivate?: boolean;
-    maxPlayers?: number;
-    timeLimit?: number;
-    gameName?: string;
-    password?: string;
-  };
+  gameMode?: 'classic' | 'blitz' | 'ranked' | 'custom';
+  isPrivate?: boolean;
+  maxPlayers?: number;
+  timeLimit?: number;
+  gameName?: string;
+  password?: string;
 }
 
 export interface MakeMoveRequest {
-  row: number;
-  col: number;
+  position?: number; // Backend expects position (0-8) or row/col
+  row?: number;
+  col?: number;
+  player?: 'X' | 'O'; // Optional player identifier
 }
 
 export interface JoinGameRequest {
   roomId: string;
   password?: string;
+}
+
+export interface JoinGameResponse {
+  gameId: string;
+  roomId: string;
+  players: {
+    player1: GamePlayer | null;
+    player2: GamePlayer | null;
+  };
+  status: GameStatus;
+  board: CellValue[][];
+  currentPlayer: 'X' | 'O';
+  gameMode: string;
+  isPrivate: boolean;
+  gameName: string;
+  startedAt?: string;
+  playerSymbol: 'X' | 'O';
+  message?: string;
 }
 
 // Matchmaking Types
@@ -497,6 +517,7 @@ export interface AuthContextType {
   refreshToken: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (data: UpdateProfileData) => Promise<void>;
+  updateUserStats: (stats: Partial<UserStats>) => void;
   changePassword: (credentials: ChangePasswordCredentials) => Promise<void>;
   verifyEmail: (email: string, verificationCode: string) => Promise<void>;
   resendVerification: (email: string) => Promise<void>;
@@ -509,11 +530,11 @@ export interface GameContextType {
   games: Game[];
   isLoading: boolean;
   createGame: (request: CreateGameRequest) => Promise<Game>;
-  joinGame: (roomId: string) => Promise<any>;
-  makeMove: (request: GameMoveRequest) => Promise<Game>;
+  joinGame: (roomId: string, password?: string) => Promise<Game>;
+  makeMove: (roomId: string, moveRequest: MakeMoveRequest) => Promise<Game>;
   forfeitGame: (roomId: string) => Promise<Game | undefined>;
   getGameState: (roomId: string) => Promise<Game>;
-  getActiveGames: () => Promise<any>;
+  getActiveGames: () => Promise<Game[]>;
   getUserStats: () => Promise<UserStats>;
   getLeaderboard: (page?: number, limit?: number) => Promise<LeaderboardEntry[]>;
   // --- Added APIs ---
@@ -559,3 +580,5 @@ export interface MatchmakingContextType {
   getQueueStatus: () => Promise<any>;
   getQueueStats: () => Promise<any>;
 }
+
+

@@ -60,7 +60,45 @@ export const matchmakingService = {
 
   // Get matchmaking statistics
   getStats: async (): Promise<MatchmakingStats> => {
-    const response = await apiClient.get('/game/matchmaking/stats');
-    return response.data;
+    try {
+      const response = await apiClient.get('/game/matchmaking/stats', {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (response.data?.success && response.data?.data) {
+        // Map backend response to frontend interface
+        const backendData = response.data.data;
+        return {
+          totalPlayersInQueue: backendData.totalPlayers || 0,
+          averageWaitTime: backendData.averageWaitTime || 0,
+          peakHours: backendData.peakHours || [],
+          skillDistribution: {
+            beginner: backendData.levelDistribution?.[0] || 0,
+            intermediate: backendData.levelDistribution?.[1] || 0,
+            advanced: backendData.levelDistribution?.[2] || 0
+          }
+        };
+      }
+      
+      throw new Error('Invalid stats response format');
+    } catch (error) {
+      console.error('Error fetching matchmaking stats:', error);
+      // Return fallback stats matching the interface
+      return {
+        totalPlayersInQueue: 0,
+        averageWaitTime: 0,
+        peakHours: [],
+        skillDistribution: {
+          beginner: 0,
+          intermediate: 0,
+          advanced: 0
+        }
+      };
+    }
   },
 };
+
+

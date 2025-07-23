@@ -121,3 +121,5 @@ const GameInfo: React.FC<GameInfoProps> = ({ game, currentUser, onForfeit }) => 
 };
 
 export default GameInfo;
+
+

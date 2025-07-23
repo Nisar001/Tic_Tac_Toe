@@ -30,3 +30,5 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ users }) => {
     </div>
   );
 };
+
+

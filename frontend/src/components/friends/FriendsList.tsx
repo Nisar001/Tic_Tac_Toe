@@ -3,8 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FriendCard } from './FriendCard';
 import { FaUsers, FaGamepad } from 'react-icons/fa';
-import friendsAPI from '../../services/friends';
-
+import { friendsAPI } from '../../services/friends';
 
 interface FriendsListProps {
   search?: string;
@@ -21,12 +20,15 @@ export const FriendsList: React.FC<FriendsListProps> = ({ search = '' }) => {
       setLoadingAll(true);
       setError(null);
       friendsAPI.getFriends()
-        .then((users: any[]) => {
-          setAllUsers(users || []);
+        .then((response: any) => {
+          // Handle both direct array and wrapped response formats
+          const users = response?.data?.friends || response?.friends || response || [];
+          setAllUsers(Array.isArray(users) ? users : []);
           setLoadingAll(false);
         })
         .catch((err: any) => {
-          setError('Failed to load suggested users.');
+          console.error('Failed to load friends:', err);
+          setError(err?.message || 'Failed to load suggested users.');
           setLoadingAll(false);
         });
     }
@@ -67,7 +69,6 @@ export const FriendsList: React.FC<FriendsListProps> = ({ search = '' }) => {
       </div>
     );
   }
-
 
   // Filter friends by search string (case-insensitive)
   const filterBySearch = (friends: typeof state.friends) => {
@@ -141,3 +142,5 @@ export const FriendsList: React.FC<FriendsListProps> = ({ search = '' }) => {
     </div>
   );
 };
+
+

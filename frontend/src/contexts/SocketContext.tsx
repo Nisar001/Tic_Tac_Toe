@@ -48,18 +48,26 @@ export const SocketProvider: React.FC<SocketProviderProps> = ({ children }) => {
   }, [state.socket]);
 
   const connect = () => {
-    if (!state.socket || !state.isConnected) {
-      const socket = socketService.connect();
-      dispatch({ type: 'SET_SOCKET', payload: socket });
-
-      socket.on('connect', () => {
-        dispatch({ type: 'SET_CONNECTED', payload: true });
-      });
-
-      socket.on('disconnect', () => {
-        dispatch({ type: 'SET_CONNECTED', payload: false });
-      });
+    // Prevent multiple connections
+    if (state.socket?.connected || state.isConnected) {
+      return;
     }
+
+    const socket = socketService.connect();
+    dispatch({ type: 'SET_SOCKET', payload: socket });
+
+    socket.on('connect', () => {
+      dispatch({ type: 'SET_CONNECTED', payload: true });
+    });
+
+    socket.on('disconnect', () => {
+      dispatch({ type: 'SET_CONNECTED', payload: false });
+    });
+
+    // Handle connection errors
+    socket.on('connect_error', () => {
+      dispatch({ type: 'SET_CONNECTED', payload: false });
+    });
   };
 
   const disconnect = () => {
@@ -107,3 +115,5 @@ export const useSocket = (): SocketContextType => {
   }
   return context;
 };
+
+

@@ -2,10 +2,6 @@ import { apiClient } from './api';
 import { 
   LoginRequest, 
   RegisterRequest, 
-  User, 
-  AuthResponse,
-  ProfileResponse,
-  RegisterResponse,
   VerifyEmailRequest,
   ForgotPasswordRequest,
   ResetPasswordRequest,
@@ -53,8 +49,8 @@ export const authAPI = {
   logoutAll: () => 
     apiClient.post('/auth/logout-all'),
 
-  deleteAccount: () => 
-    apiClient.delete('/auth/account'),
+  deleteAccount: (password: string) => 
+    apiClient.delete('/auth/delete-account', { data: { password } }),
 
   // Social authentication
   googleAuth: () => 
@@ -71,3 +67,5 @@ export const authAPI = {
 };
 
 export default authAPI;
+
+

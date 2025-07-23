@@ -2,12 +2,13 @@ import React, { createContext, useContext, useReducer, useEffect, ReactNode } fr
 import { useAuth } from './AuthContext';
 import gameAPI from '../services/game';
 import { useSocket } from './SocketContext';
+import { useAPIManager } from './APIManagerContext';
 import { SOCKET_EVENTS } from '../constants';
 import {
   GameContextType,
   Game,
   CreateGameRequest,
-  GameMoveRequest,
+  MakeMoveRequest,
   UserStats,
   LeaderboardEntry,
 } from '../types';
@@ -75,26 +76,25 @@ interface GameProviderProps {
 export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
   const { socket, on, off } = useSocket();
+  const { executeAPI } = useAPIManager();
 
   useEffect(() => {
     if (!socket) return;
 
     const setupSocketListeners = () => {
-      // Game events
-      on(SOCKET_EVENTS.GAME_CREATED, handleGameCreated);
-      on(SOCKET_EVENTS.GAME_JOINED, handleGameJoined);
-      on(SOCKET_EVENTS.GAME_STATE_UPDATE, handleGameStateUpdate);
-      on(SOCKET_EVENTS.GAME_ENDED, handleGameEnded);
+      // Game events - updated to match API documentation
+      on(SOCKET_EVENTS.GAME_UPDATE, handleGameUpdate);
+      on(SOCKET_EVENTS.MOVE_RESULT, handleMoveResult);
+      on(SOCKET_EVENTS.GAME_OVER, handleGameOver);
       on(SOCKET_EVENTS.PLAYER_JOINED, handlePlayerJoined);
       on(SOCKET_EVENTS.PLAYER_LEFT, handlePlayerLeft);
       on(SOCKET_EVENTS.GAME_ERROR, handleGameError);
     };
 
     const cleanupSocketListeners = () => {
-      off(SOCKET_EVENTS.GAME_CREATED, handleGameCreated);
-      off(SOCKET_EVENTS.GAME_JOINED, handleGameJoined);
-      off(SOCKET_EVENTS.GAME_STATE_UPDATE, handleGameStateUpdate);
-      off(SOCKET_EVENTS.GAME_ENDED, handleGameEnded);
+      off(SOCKET_EVENTS.GAME_UPDATE, handleGameUpdate);
+      off(SOCKET_EVENTS.MOVE_RESULT, handleMoveResult);
+      off(SOCKET_EVENTS.GAME_OVER, handleGameOver);
       off(SOCKET_EVENTS.PLAYER_JOINED, handlePlayerJoined);
       off(SOCKET_EVENTS.PLAYER_LEFT, handlePlayerLeft);
       off(SOCKET_EVENTS.GAME_ERROR, handleGameError);
@@ -107,29 +107,27 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     };
   }, [socket, on, off]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleGameCreated = (data: { game: Game }) => {
+  const handleGameUpdate = (data: { game: Game }) => {
     dispatch({ type: 'SET_CURRENT_GAME', payload: data.game });
     dispatch({ type: 'ADD_GAME', payload: data.game });
     toast.success('Game created successfully!');
   };
 
-  const handleGameJoined = (data: { game: Game }) => {
+  const handleMoveResult = (data: { game: Game }) => {
     dispatch({ type: 'SET_CURRENT_GAME', payload: data.game });
     dispatch({ type: 'UPDATE_GAME', payload: data.game });
     toast.success('Joined game successfully!');
   };
 
-  const handleGameStateUpdate = (data: { game: Game }) => {
+  const handleGameOver = (data: { game: Game; winner?: string; reason?: string; stats?: UserStats }) => {
     dispatch({ type: 'UPDATE_GAME', payload: data.game });
     if (state.currentGame?.id === data.game.id) {
       dispatch({ type: 'SET_CURRENT_GAME', payload: data.game });
     }
-  };
 
-  const handleGameEnded = (data: { game: Game; winner?: string; reason?: string }) => {
-    dispatch({ type: 'UPDATE_GAME', payload: data.game });
-    if (state.currentGame?.id === data.game.id) {
-      dispatch({ type: 'SET_CURRENT_GAME', payload: data.game });
+    // Update user stats if provided in the game over response
+    if (data.stats) {
+      updateUserStats(data.stats);
     }
 
     if (data.winner) {
@@ -154,33 +152,40 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
   };
 
   const createGame = async (request: CreateGameRequest): Promise<Game> => {
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      
-      const game = await gameAPI.createGame(request);
-      if (!game) {
-        throw new Error('Failed to create game');
+    const result = await executeAPI(
+      'createGame',
+      () => gameAPI.createGame(request),
+      {
+        maxRetries: 3,
+        showToast: true,
+        preventDuplicates: true
       }
-      return game;
-    } catch (error: any) {
-      const message = error.response?.data?.message || error.message || 'Failed to create game';
-      toast.error(message);
-      throw error;
-    } finally {
-      dispatch({ type: 'SET_LOADING', payload: false });
+    );
+    if (!result) {
+      throw new Error('Failed to create game');
     }
+    // Handle different response structures
+    if (result && typeof result === 'object' && 'game' in result) {
+      return (result as any).game;
+    }
+    return result as Game;
   };
 
   // joinGame removed: not present in new API docs. Use createGame and getGameState instead.
 
   // Updated makeMove to match new API and add retry logic
-  const makeMove = async (request: GameMoveRequest, retry = false): Promise<Game> => {
+  const makeMove = async (roomId: string, moveRequest: MakeMoveRequest, retry = false): Promise<Game> => {
     try {
-      const game = await gameAPI.makeMove(request.roomId, {
-        row: request.position.row,
-        col: request.position.col
-      });
-      if (game) {
+      const response = await gameAPI.makeMove(roomId, moveRequest);
+      
+      // Handle different response formats from backend
+      let game: Game;
+      if (response && typeof response === 'object') {
+        if ('game' in response) {
+          game = response.game as Game;
+        } else {
+          game = response as Game;
+        }
         return game;
       }
       throw new Error('Move failed');
@@ -205,14 +210,55 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
       throw new Error(message);
     }
   };
-  // Dummy joinGame to satisfy GameContextType contract (not used)
-  const joinGame = async (roomId: string): Promise<any> => {
-    throw new Error('joinGame is not implemented. Use createGame and getGameState instead.');
+
+  // Real joinGame implementation - Updated to handle backend response format
+  const joinGame = async (roomId: string, password?: string): Promise<Game> => {
+    try {
+      dispatch({ type: 'SET_LOADING', payload: true });
+      const result = await gameAPI.joinGame(roomId, password);
+      
+      if (!result) {
+        throw new Error('Failed to join game');
+      }
+      
+      // Handle different response formats from backend
+      let game: Game;
+      if (result.gameId || result.roomId) {
+        // Successfully joined, fetch current game state
+        game = await getGameState(result.roomId || result.gameId || roomId);
+      } else {
+        // Response might contain the game data directly
+        game = result as Game;
+        dispatch({ type: 'SET_CURRENT_GAME', payload: game });
+      }
+      
+      toast.success(result.message || 'Joined game successfully!');
+      return game;
+    } catch (error: any) {
+      const message = error?.response?.data?.message || error?.message || 'Failed to join game';
+      toast.error(message);
+      throw new Error(message);
+    } finally {
+      dispatch({ type: 'SET_LOADING', payload: false });
+    }
   };
 
   const getGameState = async (roomId: string, retry = false): Promise<Game> => {
     try {
-      const game = await gameAPI.getGameState(roomId);
+      const gameResult = await gameAPI.getGameState(roomId);
+      
+      // Handle different response formats from backend
+      let game: Game;
+      if (gameResult && typeof gameResult === 'object') {
+        if ('gameState' in gameResult) {
+          game = gameResult.gameState as Game;
+        } else {
+          game = gameResult as Game;
+        }
+      } else {
+        throw new Error('Invalid game state response');
+      }
+      
       if (game) {
         dispatch({ type: 'SET_CURRENT_GAME', payload: game });
         return game;
@@ -230,7 +276,18 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     if (state.isLoading || activeGamesLoading) return state.games;
     activeGamesLoading = true;
     try {
-      const games = await gameAPI.getActiveGames();
+      const gamesResult = await gameAPI.getActiveGames();
+      
+      // Handle different response formats from backend
+      let games: Game[];
+      if (Array.isArray(gamesResult)) {
+        games = gamesResult;
+      } else if (gamesResult && typeof gamesResult === 'object' && 'games' in gamesResult) {
+        games = (gamesResult as any).games;
+      } else {
+        games = [];
+      }
+      
       dispatch({ type: 'SET_GAMES', payload: games });
       return games;
     } catch (error: any) {
@@ -244,35 +301,57 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
     }
   };
 
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, updateUserStats } = useAuth();
   const getUserStats = async (): Promise<UserStats> => {
     if (!isAuthenticated || authLoading) {
       throw new Error('Not authenticated');
     }
     try {
-      const statsResponse = await gameAPI.getUserGameStats();
+      const statsResponse: any = await gameAPI.getUserGameStats();
+
+      // Handle different response formats
+      let statsData: any = null;
+      
       if (statsResponse && typeof statsResponse === 'object') {
+        // Check if statsResponse has 'stats' property (expected format)
         if ('stats' in statsResponse && statsResponse.stats) {
-          const s = statsResponse.stats as Partial<UserStats>;
-          const isUserStats = (obj: any): obj is UserStats => {
-            return obj &&
-              typeof obj.level === 'number' &&
-              typeof obj.xp === 'number' &&
-              typeof obj.gamesPlayed === 'number' &&
-              typeof obj.wins === 'number' &&
-              typeof obj.losses === 'number' &&
-              typeof obj.draws === 'number' &&
-              typeof obj.winRate === 'number';
-          };
-          if (isUserStats(s)) {
-            return s as UserStats;
-          } else {
-            console.error('Malformed user stats object:', s);
-          }
-        } else {
-          console.error('No stats property in response:', statsResponse);
+          statsData = statsResponse.stats;
         }
-        // Fallback: return default UserStats if missing
+        // Check if statsResponse itself contains the stats (alternative format)
+        else if ('gamesPlayed' in statsResponse || 'wins' in statsResponse) {
+          statsData = statsResponse;
+        }
+        // Check if it's wrapped in a data property
+        else if ('data' in statsResponse && statsResponse.data && 
+                 typeof statsResponse.data === 'object' && 
+                 statsResponse.data !== null && 
+                 'stats' in statsResponse.data) {
+          statsData = (statsResponse as any).data.stats;
+        }
+      }
+      
+      if (statsData && typeof statsData === 'object') {
+        // Accept partial UserStats, fallback for missing fields
+        return {
+          level: typeof statsData.level === 'number' ? statsData.level : 0,
+          xp: typeof statsData.xp === 'number' ? statsData.xp : 0,
+          gamesPlayed: typeof statsData.gamesPlayed === 'number' ? statsData.gamesPlayed : 0,
+          wins: typeof statsData.wins === 'number' ? statsData.wins : 0,
+          losses: typeof statsData.losses === 'number' ? statsData.losses : 0,
+          draws: typeof statsData.draws === 'number' ? statsData.draws : 0,
+          winRate: typeof statsData.winRate === 'number' ? statsData.winRate : 0,
+          currentStreak: typeof statsData.currentStreak === 'number' ? statsData.currentStreak : 0,
+          longestStreak: typeof statsData.longestStreak === 'number' ? statsData.longestStreak : 0,
+          totalScore: typeof statsData.totalScore === 'number' ? statsData.totalScore : 0,
+          averageGameDuration: typeof statsData.averageGameDuration === 'number' ? statsData.averageGameDuration : 0,
+          rank: typeof statsData.rank === 'string' ? statsData.rank : undefined,
+          ranking: typeof statsData.ranking === 'number' ? statsData.ranking : undefined,
+        };
+      } else {
+        console.error('Malformed user stats object. Expected format not found:', statsResponse);
+
+        // Don't show error toast for malformed data, just log it and return defaults
+        console.warn('Using default stats due to response format mismatch');
         return {
           level: 0,
           xp: 0,
@@ -282,13 +361,20 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
           draws: 0,
           winRate: 0,
           currentStreak: 0,
+          longestStreak: 0,
+          totalScore: 0,
+          averageGameDuration: 0,
         };
       }
-      throw new Error('Failed to get user stats: Malformed response');
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || 'Failed to get user stats';
       console.error('getUserStats error:', error);
-      toast.error(message);
+      
+      // Only show toast for actual network/server errors, not data format issues
+      if (error?.response?.status && error.response.status >= 400) {
+        toast.error(message);
+      }
+      
       // Fallback: return default UserStats if error
       return {
         level: 0,
@@ -299,6 +385,9 @@ export const GameProvider: React.FC<GameProviderProps> = ({ children }) => {
         draws: 0,
         winRate: 0,
         currentStreak: 0,
+        longestStreak: 0,
+        totalScore: 0,
+        averageGameDuration: 0,
       };
     }
   };
@@ -408,3 +497,5 @@ export const useGame = (): GameContextType => {
   }
   return context;
 };
+
+

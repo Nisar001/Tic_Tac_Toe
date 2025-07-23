@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useGame } from '../../contexts/GameContext';
+import { useAPIManager } from '../../contexts/APIManagerContext';
 import { useNavigate } from 'react-router-dom';
-import { PlusIcon, PlayIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, PlayIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
 const Game: React.FC = () => {
   const { getActiveGames, createGame, isLoading } = useGame();
+  const { loading, errors } = useAPIManager();
   const [games, setGames] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
@@ -26,22 +28,15 @@ const Game: React.FC = () => {
     loadGames();
   }, [loadGames]);
 
-  const handleRetry = () => {
-    setRetrying(true);
-    loadGames();
-  };
-
   const handleCreateGame = async () => {
     try {
       const game = await createGame({
-        gameConfig: {
-          gameMode: 'classic',
-          isPrivate: false,
-          maxPlayers: 2,
-          timeLimit: 300, // seconds
-          gameName: 'Quick Match',
-          password: '',
-        }
+        gameMode: 'classic',
+        isPrivate: false,
+        maxPlayers: 2,
+        timeLimit: 300, // seconds
+        gameName: 'Quick Match',
+        password: '',
       });
       navigate(`/game/${game.roomId || game.room || game.id}`);
     } catch (error) {
@@ -61,6 +56,40 @@ const Game: React.FC = () => {
           Create Game
         </button>
       </div>
+
+      {/* API Manager Status */}
+      {(Object.keys(loading).length > 0 || Object.keys(errors).length > 0) && (
+        <div className="bg-gray-50 rounded-lg p-4 mb-6">
+          <h3 className="text-sm font-medium text-gray-900 mb-3">API Status</h3>
+          <div className="space-y-2">
+            {Object.entries(loading).map(([key, isLoading]) => 
+              isLoading && (
+                <div key={key} className="flex items-center gap-2 text-sm">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                  <span className="text-gray-600">Loading {key}...</span>
+                </div>
+              )
+            )}
+            {Object.entries(errors).map(([key, error]) => 
+              error && (
+                <div key={key} className="flex items-center justify-between text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <span className="text-red-600">{key}: {error}</span>
+                  </div>
+                  <button
+                    onClick={() => loadGames()}
+                    className="flex items-center gap-1 px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                  >
+                    <ArrowPathIcon className="w-3 h-3" />
+                    Retry
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
       {isLoading ? (
         <LoadingSpinner />
       ) : error ? (
@@ -69,7 +98,7 @@ const Game: React.FC = () => {
           <br />
           <button
             className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            onClick={handleRetry}
+            onClick={loadGames}
             disabled={retrying}
           >
             {retrying ? 'Retrying...' : 'Retry'}
@@ -118,3 +147,5 @@ const Game: React.FC = () => {
 }
 
 export default Game;
+
+

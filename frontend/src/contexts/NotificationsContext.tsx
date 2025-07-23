@@ -4,6 +4,7 @@ import { notificationsAPI } from '../services/notifications';
 import { Notification } from '../types';
 import { useSocket } from './SocketContext';
 import { useAuth } from './AuthContext';
+import { useAPIManager } from './APIManagerContext';
 
 interface NotificationsState {
   notifications: Notification[];
@@ -113,6 +114,7 @@ export const NotificationsProvider: React.FC<NotificationsProviderProps> = ({ ch
   const [state, dispatch] = useReducer(notificationsReducer, initialState);
   const { socket } = useSocket();
   const { user } = useAuth();
+  const { executeAPI } = useAPIManager();
 
   // Load notifications
     let notificationsLoading = false;
@@ -177,7 +179,6 @@ export const NotificationsProvider: React.FC<NotificationsProviderProps> = ({ ch
       toast.error(message);
     }
   };
-
 
   // Get unread count
   const getUnreadCount = async () => {
@@ -263,3 +264,5 @@ export const useNotifications = (): NotificationsContextType => {
   }
   return context;
 };
+
+

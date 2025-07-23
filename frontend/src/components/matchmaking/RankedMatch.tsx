@@ -6,3 +6,5 @@ export const RankedMatch: React.FC = () => {
   // In a real implementation, this would have different preferences
   return <QuickMatch />;
 };
+
+

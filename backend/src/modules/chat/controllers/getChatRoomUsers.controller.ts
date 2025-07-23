@@ -108,7 +108,7 @@ export const getChatRoomUsers = asyncHandler(async (req: AuthenticatedRequest, r
     });
 
   } catch (error: any) {
-    console.error('Get chat room users error:', error);
+
 
     if (error.status && error.expose) {
       throw error;

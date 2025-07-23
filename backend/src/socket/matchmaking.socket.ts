@@ -30,7 +30,6 @@ export class MatchmakingSocket {
         socket.emit('match_error', { message: 'User ID missing from socket.' });
         return;
       }
-      console.log(`🔍 Find match request from ${userId}:`, data);
 
       // Use fallback values for missing user properties
       const lives = (socket.user as any).lives ?? 5;
@@ -94,7 +93,6 @@ export class MatchmakingSocket {
       }
 
     } catch (error) {
-      console.error('Find match error:', error);
       socket.emit('match_error', {
         message: 'Failed to join matchmaking queue'
       });
@@ -122,7 +120,6 @@ export class MatchmakingSocket {
         socket.emit('matchmaking_cancelled', {
           message: 'Matchmaking cancelled successfully'
         });
-        console.log(`❌ Matchmaking cancelled for user ${userId}`);
       } else {
         socket.emit('match_error', {
           message: 'Not in matchmaking queue'
@@ -130,7 +127,6 @@ export class MatchmakingSocket {
       }
 
     } catch (error) {
-      console.error('Cancel matchmaking error:', error);
       socket.emit('match_error', {
         message: 'Failed to cancel matchmaking'
       });
@@ -174,7 +170,6 @@ export class MatchmakingSocket {
       }
 
     } catch (error) {
-      console.error('Get matchmaking status error:', error);
       socket.emit('match_error', {
         message: 'Failed to get matchmaking status'
       });
@@ -186,15 +181,11 @@ export class MatchmakingSocket {
    */
   private handleMatchFound(match: MatchResult): void {
     try {
-      console.log(`🎯 Match found! Room: ${match.roomId}`);
-
       // Get sockets for both players
       const player1Socket = this.authManager.getSocketByUserId(match.player1.userId.toString());
       const player2Socket = this.authManager.getSocketByUserId(match.player2.userId.toString());
 
       if (!player1Socket || !player2Socket) {
-        console.error('One or both players not connected');
-        
         // Re-add players to queue if sockets not found
         if (player1Socket) {
           MatchmakingManager.addToQueue(match.player1);
@@ -255,7 +246,7 @@ export class MatchmakingSocket {
       });
 
     } catch (error) {
-      console.error('Handle match found error:', error);
+      // Handle match found error silently
     }
   }
 
@@ -283,7 +274,6 @@ export class MatchmakingSocket {
         }
 
       } catch (error) {
-        console.error('Periodic match checking error:', error);
         this.clearUserIntervals(userId);
       }
     }, 2000); // Check every 2 seconds

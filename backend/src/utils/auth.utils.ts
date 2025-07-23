@@ -53,7 +53,7 @@ export class AuthUtils {
   }
 
   static generateTokenPair(userId: string, email: string): { accessToken: string; refreshToken: string } {
-    const accessToken = this.generateAccessToken({ userId, email });
+    const accessToken = this.generateAccessToken({ userId, email, tokenType: 'access' });
     const refreshToken = this.generateRefreshToken({ userId });
     return { accessToken, refreshToken };
   }

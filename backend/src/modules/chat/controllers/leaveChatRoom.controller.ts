@@ -60,11 +60,11 @@ export const leaveChatRoom = asyncHandler(async (req: AuthenticatedRequest, res:
       try {
         chatSocket.handleLeaveChat?.(userSocket, { roomId: sanitizedRoomId });
       } catch (socketError) {
-        console.error('Socket error while leaving chat room:', socketError);
+
         // Proceed: leaving via API shouldn't fail even if socket fails
       }
     } else {
-      console.warn(`Socket not found for user ${userId} while leaving room ${sanitizedRoomId}`);
+
     }
 
     res.json({
@@ -78,7 +78,7 @@ export const leaveChatRoom = asyncHandler(async (req: AuthenticatedRequest, res:
     });
 
   } catch (error: any) {
-    console.error('Leave chat room error:', error);
+
     const fallbackMessage = error?.message || 'Something went wrong while leaving the chat room';
     throw createError.internal(fallbackMessage);
   }

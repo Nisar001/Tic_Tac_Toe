@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useGame } from '../contexts/GameContext';
+import { useAPIManager } from '../contexts/APIManagerContext';
 import { useNavigate } from 'react-router-dom';
 import { 
   PlusIcon, 
@@ -8,7 +9,8 @@ import {
   TrophyIcon, 
   UserGroupIcon,
   ClockIcon,
-  FireIcon 
+  FireIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { Game, UserStats } from '../types';
@@ -16,6 +18,7 @@ import { Game, UserStats } from '../types';
 const Dashboard: React.FC = () => {
   const { user, isAuthenticated, isLoading: authLoading } = useAuth();
   const { getActiveGames, createGame, getUserStats, isLoading: gameLoading } = useGame();
+  const { loading, errors, retry } = useAPIManager();
   const { joinQueue } = require('../contexts/MatchmakingContext').useMatchmakingContext();
   const navigate = useNavigate();
   const [activeGames, setActiveGames] = useState<Game[]>([]);
@@ -37,29 +40,33 @@ const Dashboard: React.FC = () => {
       });
 
       let stats: UserStats | null = null;
+      
+      // First, try to use stats from user object (from login response)
+      if (user?.stats && typeof user.stats === 'object' && typeof user.stats.gamesPlayed === 'number') {
+        stats = user.stats;
+        setUserStats(stats);
+      }
+      
+      // Then try to fetch fresh stats from API for real-time updates
       try {
         const apiStats = await getUserStats();
-        if (
-          apiStats &&
-          apiStats.gamesPlayed === 0 &&
-          apiStats.wins === 0 &&
-          apiStats.losses === 0 &&
-          apiStats.draws === 0 &&
-          apiStats.winRate === 0 &&
-          user?.stats && user.stats.gamesPlayed > 0
-        ) {
-          stats = user.stats;
-        } else {
-          stats = apiStats;
+        
+        // Validate that we got a proper stats object
+        if (apiStats && typeof apiStats === 'object' && typeof apiStats.gamesPlayed === 'number') {
+          // Use API stats if they're different or more recent
+          if (!stats || apiStats.gamesPlayed >= stats.gamesPlayed) {
+            stats = apiStats;
+          }
         }
       } catch (error: any) {
-        setStatsError(error?.message || 'Failed to load user stats');
-        if (user?.stats && user.stats.gamesPlayed > 0) {
-          stats = user.stats;
-        } else {
+        // If API fails but we have user stats from login, that's fine
+        if (!stats) {
+          setStatsError(error?.message || 'Failed to load user stats');
+          
+          // Fallback to default stats only if no user stats available
           stats = {
-            level: 0,
-            xp: 0,
+            level: user?.level || 0,
+            xp: user?.xp || 0,
             gamesPlayed: 0,
             wins: 0,
             losses: 0,
@@ -71,7 +78,7 @@ const Dashboard: React.FC = () => {
       }
 
       const gamesResponse = await gamesPromise;
-      const games = gamesResponse?.games || [];
+      const games = Array.isArray(gamesResponse) ? gamesResponse : (gamesResponse?.games || []);
       setActiveGames(Array.isArray(games) ? games : []);
       setUserStats(stats);
     } catch (error) {
@@ -100,10 +107,8 @@ const Dashboard: React.FC = () => {
   const handleCreateGame = async () => {
     try {
       const game = await createGame({
-        gameConfig: {
-          gameMode: 'classic',
-          isPrivate: false,
-        }
+        gameMode: 'classic',
+        isPrivate: false,
       });
       navigate(`/game/${game.roomId || game.room || game.id}`);
     } catch (error) {
@@ -204,16 +209,61 @@ const Dashboard: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-lg font-semibold text-gray-900">Game Statistics</h2>
-          <button
-            className="px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
-            onClick={handleRefreshStats}
-            title="Refresh Stats"
-          >
-            Refresh
-          </button>
+          <div className="flex items-center gap-2">
+            {(loading.getUserStats || loading.getActiveGames) && (
+              <div className="flex items-center text-sm text-gray-500">
+                <div className="animate-spin w-4 h-4 border-2 border-gray-300 border-t-primary-600 rounded-full mr-2"></div>
+                Loading...
+              </div>
+            )}
+            <button
+              className="flex items-center gap-2 px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors disabled:opacity-50"
+              onClick={handleRefreshStats}
+              disabled={loading.getUserStats || false}
+              title="Refresh Stats"
+            >
+              <ArrowPathIcon className={`w-4 h-4 ${loading.getUserStats ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
         </div>
         {statsError && (
-          <div className="text-red-600 text-sm mb-2">{statsError}</div>
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex items-center justify-between">
+              <span className="text-red-600 text-sm">{statsError}</span>
+              <button
+                onClick={() => retry('getUserStats', getUserStats)}
+                className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-100 rounded transition-colors duration-200"
+              >
+                <ArrowPathIcon className="w-3 h-3" />
+                Retry
+              </button>
+            </div>
+          </div>
+        )}
+        {errors && Object.keys(errors).length > 0 && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <div className="space-y-2">
+              {Object.entries(errors).map(([apiCall, error]) => (
+                <div key={apiCall} className="flex items-center justify-between">
+                  <span className="text-red-600 text-sm">API Error ({apiCall}): {error}</span>
+                  <button
+                    onClick={() => {
+                      if (apiCall === 'getUserStats') {
+                        retry(apiCall, getUserStats);
+                      } else if (apiCall === 'getActiveGames') {
+                        retry(apiCall, getActiveGames);
+                      }
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-100 rounded transition-colors duration-200"
+                  >
+                    <ArrowPathIcon className="w-3 h-3" />
+                    Retry
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
           <div className="card text-center">
@@ -298,3 +348,5 @@ const Dashboard: React.FC = () => {
 };
 
 export default Dashboard;
+
+

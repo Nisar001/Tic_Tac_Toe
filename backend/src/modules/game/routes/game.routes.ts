@@ -1,24 +1,26 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
+import { logError } from '../../../utils/logger';
 
 // Import controllers
 import {
-  getGameState,
-  getActiveGames,
-  createCustomGame,
   getUserGameStats,
   getLeaderboard,
+  createGameRoom,
+  joinGameRoom,
+  getAvailableRooms,
+  getGameRoom,
+  leaveGameRoom,
+  makeGameMove,
   forfeitGame,
-  makeMove
-} from '../controllers';
-
-import {
+  getGameState,
+  getUserActiveGames,
   joinQueue,
   leaveQueue,
   getMatchmakingStatus,
   getQueueStats,
   forceMatch,
   cleanupQueue
-} from '../controllers/matchmaking.controller';
+} from '../controllers';
 
 // Import middleware
 import { authenticate, checkLives } from '../../../middlewares/auth.middleware';
@@ -28,53 +30,43 @@ import {
   validatePagination,
   handleValidationErrors
 } from '../../../middlewares/validation.middleware';
-import { Request as ExpressRequest } from 'express';
 import {
   gameCreationRateLimit,
   createDynamicRateLimit
 } from '../../../middlewares/rateLimiting.middleware';
 import { validateApiKey } from '../../../middlewares/security.middleware';
-import { logWarn } from '../../../utils/logger';
+import { asyncHandler } from '../../../middlewares/error.middleware';
 import { IUser } from '../../../models/user.model';
 
+/**
+ * Game Routes
+ * 
+ * Available endpoints:
+ * - POST /rooms, /create, /createGame - Create new game room
+ * - GET /rooms - Get available rooms  
+ * - POST /rooms/:roomId/join, /join/:gameId - Join game
+ * - POST /rooms/:roomId/move, /move - Make game move
+ * - GET /rooms/:roomId/state, /state/:gameId - Get game state
+ * - GET /active-games - Get user's active games
+ * - GET /stats - Get user statistics
+ * - GET /leaderboard - Get leaderboard
+ * - POST /matchmaking/join - Join matchmaking queue
+ * - POST /matchmaking/leave - Leave matchmaking queue
+ */
+
 const router = Router();
-// Patch Express Request type to include user property from user.model
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: IUser;
-  }
-}
 
-const asyncHandler = (fn: Function) => (req: Request, res: Response, next: NextFunction) => {
-  Promise.resolve(fn(req, res, next)).catch(next);
-};
+// Apply authentication to all routes
+router.use(authenticate as any);
 
-// Game management routes
-router.post('/create',
-  gameCreationRateLimit,
-  checkLives(1),
-  asyncHandler(createCustomGame)
-);
-
-router.get('/state/:roomId',
-  validateGameId,
-  handleValidationErrors,
-  asyncHandler(getGameState)
-);
-
-router.get('/active',
-  asyncHandler(getActiveGames)
-);
-
-router.post('/forfeit/:roomId',
-  validateGameId,
-  handleValidationErrors,
-  asyncHandler(forfeitGame)
-);
-
+// User statistics routes
 router.get('/stats',
-  authenticate,
   asyncHandler(getUserGameStats)
+);
+
+// Get user's active games
+router.get('/active-games',
+  asyncHandler(getUserActiveGames)
 );
 
 router.get('/leaderboard',
@@ -83,10 +75,95 @@ router.get('/leaderboard',
   asyncHandler(getLeaderboard)
 );
 
+// Game room management routes
+router.post('/rooms',
+  gameCreationRateLimit,
+  checkLives(1) as any,
+  asyncHandler(createGameRoom)
+);
+
+// Alias for game creation (common frontend expectations)
+router.post('/create',
+  gameCreationRateLimit,
+  checkLives(1) as any,
+  asyncHandler(createGameRoom)
+);
+
+router.post('/createGame',
+  gameCreationRateLimit,
+  checkLives(1) as any,
+  asyncHandler(createGameRoom)
+);
+
+router.get('/rooms',
+  asyncHandler(getAvailableRooms)
+);
+
+router.get('/rooms/:roomId',
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(getGameRoom)
+);
+
+router.post('/rooms/:roomId/join',
+  validateGameId,
+  handleValidationErrors,
+  checkLives(1) as any,
+  asyncHandler(joinGameRoom)
+);
+
+// Alias for joining games
+router.post('/join/:gameId',
+  validateGameId,
+  handleValidationErrors,
+  checkLives(1) as any,
+  asyncHandler(joinGameRoom)
+);
+
+router.post('/rooms/:roomId/leave',
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(leaveGameRoom)
+);
+
+// Game move routes
+router.post('/rooms/:roomId/move',
+  validateGameMove,
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(makeGameMove)
+);
+
+// Alias for making moves
+router.post('/move',
+  validateGameMove,
+  handleValidationErrors,
+  asyncHandler(makeGameMove)
+);
+
+router.post('/rooms/:roomId/forfeit',
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(forfeitGame)
+);
+
+router.get('/rooms/:roomId/state',
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(getGameState)
+);
+
+// Alias for getting game state
+router.get('/state/:gameId',
+  validateGameId,
+  handleValidationErrors,
+  asyncHandler(getGameState)
+);
+
 // Matchmaking routes
 router.post('/matchmaking/join',
   createDynamicRateLimit(10, 60 * 1000), // 10 requests per minute
-  checkLives(1),
+  checkLives(1) as any,
   asyncHandler(joinQueue)
 );
 
@@ -113,14 +190,6 @@ router.post('/admin/cleanup-queue',
   asyncHandler(cleanupQueue)
 );
 
-// Move route
-router.post('/move/:roomId',
-  validateGameMove,
-  validateGameId,
-  handleValidationErrors,
-  asyncHandler(makeMove)
-);
-
 // Game history route
 router.get('/history',
   validatePagination,
@@ -130,8 +199,7 @@ router.get('/history',
     const user = req.user as IUser;
     
     try {
-      // Import Game model here to avoid circular dependency
-      const { Game } = require('../../../models/game.model');
+      const Game = require('../../../models/game.model').default;
       
       const games = await Game.find({
         $or: [
@@ -152,112 +220,30 @@ router.get('/history',
         ]
       });
 
-      res.json({
+      const totalPages = Math.ceil(total / Number(limit));
+
+      res.status(200).json({
         success: true,
         message: 'Game history retrieved successfully',
         data: {
           games,
           pagination: {
-            page: Number(page),
-            limit: Number(limit),
-            total,
-            pages: Math.ceil(total / Number(limit))
+            currentPage: Number(page),
+            totalPages,
+            totalGames: total,
+            hasNextPage: Number(page) < totalPages,
+            hasPrevPage: Number(page) > 1
           }
         }
       });
     } catch (error) {
+      logError(`Error fetching game history: ${error instanceof Error ? error.message : error}`);
       res.status(500).json({
         success: false,
-        message: 'Failed to retrieve game history',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        message: 'Failed to fetch game history'
       });
     }
   })
 );
-
-// Join game route
-router.post('/join/:roomId',
-  validateGameId,
-  handleValidationErrors,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { roomId } = req.params;
-    const user = req.user as IUser;
-    
-    try {
-      // Import Game model here to avoid circular dependency
-      const { Game } = require('../../../models/game.model');
-      
-      const game = await Game.findOne({ room: roomId });
-      
-      if (!game) {
-        return res.status(404).json({
-          success: false,
-          message: 'Game not found'
-        });
-      }
-
-      // Check if game is full
-      if (game.players.player1 && game.players.player2) {
-        return res.status(400).json({
-          success: false,
-          message: 'Game is already full'
-        });
-      }
-
-      // Check if user is already in this game
-      if (game.players.player1?.toString() === user._id.toString() || 
-          game.players.player2?.toString() === user._id.toString()) {
-        return res.status(400).json({
-          success: false,
-          message: 'You are already in this game'
-        });
-      }
-
-      // Join as player2 if player1 is taken, or player1 if player2 is taken
-      if (!game.players.player2) {
-        game.players.player2 = user._id;
-      } else if (!game.players.player1) {
-        game.players.player1 = user._id;
-      }
-
-      // Start the game if both players are present
-      if (game.players.player1 && game.players.player2) {
-        game.status = 'active';
-      }
-
-      await game.save();
-
-      res.json({
-        success: true,
-        message: 'Successfully joined game',
-        data: {
-          gameId: game._id,
-          roomId: game.room,
-          players: game.players,
-          status: game.status
-        }
-      });
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: 'Failed to join game',
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-    }
-  })
-);
-
-// Catch-all for undefined game routes
-router.use('*', (req: Request, res: Response) => {
-  logWarn(`Attempted access to undefined game route: ${req.method} ${req.originalUrl} from IP: ${req.ip}`);
-  res.status(404).json({
-    success: false,
-    message: 'Game endpoint not found',
-    availableEndpoints: [
-      '/create', '/state/:roomId', '/active', '/forfeit/:roomId', 
-      '/stats', '/leaderboard', '/matchmaking/*'
-    ]
-  });
-});
 
 export default router;

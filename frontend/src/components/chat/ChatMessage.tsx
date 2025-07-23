@@ -63,3 +63,5 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message, isOwn }) => {
     </div>
   );
 };
+
+

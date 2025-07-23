@@ -7,6 +7,7 @@ class ApiClient {
   private onTokenExpired?: () => void;
 
   constructor() {
+    console.log('🔧 API Client initialized with baseURL:', API_BASE_URL);
     this.instance = axios.create({
       baseURL: API_BASE_URL,
       timeout: 30000, // Increased timeout for slow connections
@@ -32,6 +33,7 @@ class ApiClient {
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
         }
+        console.log(`📤 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`, config.data);
         return config;
       },
       (error) => {
@@ -45,6 +47,7 @@ class ApiClient {
         return response;
       },
       async (error) => {
+        console.error('❌ API Response Error:', error.response?.status, error.config?.url, error.response?.data);
         const originalRequest = error.config;
 
         if (error.response?.status === 401 && !originalRequest._retry) {
@@ -156,3 +159,5 @@ class ApiClient {
 
 export const apiClient = new ApiClient();
 export default apiClient;
+
+

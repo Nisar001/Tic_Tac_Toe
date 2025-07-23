@@ -2,22 +2,42 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useGame } from '../../contexts/GameContext';
 import { useAuth } from '../../contexts/AuthContext';
-import { XMarkIcon, CircleStackIcon } from '@heroicons/react/24/outline';
+import { useAPIManager } from '../../contexts/APIManagerContext';
+import { XMarkIcon, CircleStackIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
 
 const GameBoard: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { currentGame, makeMove, getGameState, isLoading, forfeitGame } = useGame();
+  const { currentGame, makeMove, getGameState, isLoading, forfeitGame, joinGame } = useGame();
+  const { loading, errors, retry } = useAPIManager();
   const [board, setBoard] = useState<(string | null)[][]>(Array(3).fill(null).map(() => Array(3).fill(null)));
   const [isMyTurn, setIsMyTurn] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
+
+  const loadGameState = React.useCallback(async () => {
+    if (!roomId) return;
+    setLoadError(null);
+    setRetrying(false);
+    try {
+      await getGameState(roomId);
+    } catch (error: any) {
+      setLoadError(error?.message || 'Failed to load game state');
+    }
+  }, [roomId, getGameState]);
 
   useEffect(() => {
-    if (roomId) {
-      loadGameState();
-    }
-  }, [roomId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!roomId) return;
+    const ensureJoinedAndLoad = async () => {
+      try {
+        await joinGame(roomId!);
+      } catch (e) {}
+      await loadGameState();
+    };
+    ensureJoinedAndLoad();
+  }, [roomId, joinGame, loadGameState]);
 
   useEffect(() => {
     if (currentGame) {
@@ -38,18 +58,7 @@ const GameBoard: React.FC = () => {
     }
   }, [currentGame, user]);
 
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [retrying, setRetrying] = useState(false);
-  const loadGameState = async () => {
-    if (!roomId) return;
-    setLoadError(null);
-    setRetrying(false);
-    try {
-      await getGameState(roomId);
-    } catch (error: any) {
-      setLoadError(error?.message || 'Failed to load game state');
-    }
-  };
+  // ...existing code...
 
   const handleCellClick = async (row: number, col: number) => {
     if (!roomId || !isMyTurn || board[row][col] || currentGame?.status !== 'active') {
@@ -57,9 +66,12 @@ const GameBoard: React.FC = () => {
     }
 
     try {
-      await makeMove({
-        roomId,
-        position: { row, col },
+      // Convert row/col to position (0-8 for backend)
+      const position = row * 3 + col;
+      await makeMove(roomId, {
+        position,
+        row,
+        col,
       });
     } catch (error) {
       console.error('Failed to make move:', error);
@@ -104,26 +116,57 @@ const GameBoard: React.FC = () => {
     );
   }
 
-  if (loadError) {
+  if (loadError || (errors && Object.keys(errors).length > 0)) {
     return (
       <div className="text-center py-8">
-        <p className="text-red-600">{loadError}</p>
-        <button
-          onClick={() => {
-            setRetrying(true);
-            loadGameState();
-          }}
-          className="mt-4 btn-primary"
-          disabled={retrying}
-        >
-          {retrying ? 'Retrying...' : 'Retry'}
-        </button>
-        <button
-          onClick={() => navigate('/')}
-          className="mt-4 btn-secondary ml-2"
-        >
-          Back to Dashboard
-        </button>
+        <div className="space-y-4">
+          {loadError && (
+            <p className="text-red-600">{loadError}</p>
+          )}
+          {errors && Object.keys(errors).length > 0 && (
+            <div className="space-y-2">
+              {Object.entries(errors).map(([apiCall, error]) => (
+                <div key={apiCall} className="text-red-600">
+                  API Error ({apiCall}): {error}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="flex justify-center gap-2 mt-4">
+          <button
+            onClick={() => {
+              setRetrying(true);
+              loadGameState();
+            }}
+            className="btn-primary flex items-center gap-2"
+            disabled={retrying || loading.getGameState}
+          >
+            <ArrowPathIcon className={`w-4 h-4 ${(retrying || loading.getGameState) ? 'animate-spin' : ''}`} />
+            {retrying || loading.getGameState ? 'Retrying...' : 'Retry'}
+          </button>
+          {errors && Object.keys(errors).length > 0 && (
+            <button
+              onClick={() => {
+                Object.keys(errors).forEach(apiCall => {
+                  if (apiCall === 'getGameState') {
+                    retry(apiCall, () => getGameState(roomId!));
+                  }
+                });
+              }}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <ArrowPathIcon className="w-4 h-4" />
+              Retry API Calls
+            </button>
+          )}
+          <button
+            onClick={() => navigate('/')}
+            className="btn-secondary"
+          >
+            Back to Dashboard
+          </button>
+        </div>
       </div>
     );
   }
@@ -265,3 +308,5 @@ const GameBoard: React.FC = () => {
 };
 
 export default GameBoard;
+
+

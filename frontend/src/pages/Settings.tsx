@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useAPIManager } from '../contexts/APIManagerContext';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import authAPI from '../services/auth';
@@ -15,11 +16,13 @@ import {
   SpeakerXMarkIcon,
   GlobeAltIcon,
   TrashIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ArrowPathIcon
 } from '@heroicons/react/24/outline';
 
 const Settings: React.FC = () => {
   const { user, refreshUser, logout } = useAuth();
+  const { loading, errors, retry } = useAPIManager();
   const [logoutAllLoading, setLogoutAllLoading] = useState(false);
   const handleLogoutAll = async () => {
     setLogoutAllLoading(true);
@@ -37,6 +40,7 @@ const Settings: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
 
   const {
     register,
@@ -86,9 +90,14 @@ const Settings: React.FC = () => {
       return;
     }
 
+    if (!deletePassword.trim()) {
+      toast.error('Please enter your password to confirm account deletion');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      await authAPI.deleteAccount();
+      await authAPI.deleteAccount(deletePassword);
       toast.success('Account deleted successfully');
       logout();
     } catch (error: any) {
@@ -99,6 +108,7 @@ const Settings: React.FC = () => {
       setIsLoading(false);
       setShowDeleteConfirm(false);
       setDeleteConfirmText('');
+      setDeletePassword('');
     }
   };
 
@@ -384,11 +394,21 @@ const Settings: React.FC = () => {
                             className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm"
                             placeholder={user.username}
                           />
+                          <p className="text-sm text-red-700 font-medium">
+                            Enter your password to confirm:
+                          </p>
+                          <input
+                            type="password"
+                            value={deletePassword}
+                            onChange={(e) => setDeletePassword(e.target.value)}
+                            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-red-500 focus:border-red-500 sm:text-sm"
+                            placeholder="Enter your password"
+                          />
                           <div className="flex space-x-3">
                             <button
                               type="button"
                               onClick={handleDeleteAccount}
-                              disabled={deleteConfirmText !== user.username || isLoading}
+                              disabled={deleteConfirmText !== user.username || !deletePassword.trim() || isLoading}
                               className="bg-red-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               {isLoading ? 'Deleting...' : 'Confirm Delete'}
@@ -398,6 +418,7 @@ const Settings: React.FC = () => {
                               onClick={() => {
                                 setShowDeleteConfirm(false);
                                 setDeleteConfirmText('');
+                                setDeletePassword('');
                               }}
                               className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md text-sm font-medium hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
                             >
@@ -439,3 +460,5 @@ const Settings: React.FC = () => {
 };
 
 export default Settings;
+
+

@@ -2,12 +2,14 @@ import React from 'react';
 import { XMarkIcon, CircleStackIcon } from '@heroicons/react/24/solid';
 
 interface TicTacToeBoardProps {
-  board: string[][];
+  board: string[] | string[][]; // Support both backend formats
   onCellClick: (row: number, col: number) => void;
   isMyTurn: boolean;
   currentPlayer: string;
   gameStatus: string;
   disabled?: boolean;
+  winner?: string | null;
+  isDraw?: boolean;
 }
 
 const TicTacToeBoard: React.FC<TicTacToeBoardProps> = ({
@@ -16,10 +18,34 @@ const TicTacToeBoard: React.FC<TicTacToeBoardProps> = ({
   isMyTurn,
   currentPlayer,
   gameStatus,
-  disabled = false
+  disabled = false,
+  winner,
+  isDraw
 }) => {
+  // Convert board format if needed (backend sends flat array)
+  const getBoardMatrix = (): string[][] => {
+    if (Array.isArray(board) && board.length === 9 && typeof board[0] === 'string') {
+      // Flat array format from backend
+      const matrix: string[][] = [];
+      for (let i = 0; i < 3; i++) {
+        matrix[i] = [];
+        for (let j = 0; j < 3; j++) {
+          matrix[i][j] = (board as string[])[i * 3 + j] || '';
+        }
+      }
+      return matrix;
+    } else if (Array.isArray(board) && Array.isArray(board[0])) {
+      // Already 2D array format
+      return board as string[][];
+    }
+    // Fallback to empty board
+    return Array(3).fill(null).map(() => Array(3).fill(''));
+  };
+
+  const boardMatrix = getBoardMatrix();
+
   const renderCell = (row: number, col: number) => {
-    const cellValue = board[row][col];
+    const cellValue = boardMatrix[row][col];
     const isClickable = !disabled && isMyTurn && !cellValue && gameStatus === 'in_progress';
 
     return (
@@ -49,7 +75,13 @@ const TicTacToeBoard: React.FC<TicTacToeBoardProps> = ({
           {gameStatus === 'in_progress' && (
             isMyTurn ? "Your turn" : "Opponent's turn"
           )}
-          {gameStatus === 'completed' && 'Game completed'}
+          {gameStatus === 'completed' && (
+            winner 
+              ? `Game won by ${winner}!`
+              : isDraw 
+                ? 'Game ended in a draw!'
+                : 'Game completed'
+          )}
           {gameStatus === 'abandoned' && 'Game abandoned'}
         </h3>
         {gameStatus === 'in_progress' && (
@@ -69,3 +101,5 @@ const TicTacToeBoard: React.FC<TicTacToeBoardProps> = ({
 };
 
 export default TicTacToeBoard;
+
+

@@ -98,7 +98,8 @@ export const googleLogin = asyncHandler(async (req: Request, res: Response, next
         try {
           accessToken = AuthUtils.generateAccessToken({
             userId: user._id,
-            email: user.email
+            email: user.email,
+            tokenType: 'access'
           });
 
           refreshToken = AuthUtils.generateRefreshToken({
@@ -229,7 +230,8 @@ export const googleCallback = asyncHandler(async (req: Request, res: Response, n
         try {
           accessToken = AuthUtils.generateAccessToken({
             userId: user._id,
-            email: user.email
+            email: user.email,
+            tokenType: 'access'
           });
 
           refreshToken = AuthUtils.generateRefreshToken({

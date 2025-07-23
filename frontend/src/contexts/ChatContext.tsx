@@ -3,6 +3,8 @@ import toast from 'react-hot-toast';
 import { chatAPI } from '../services/chat';
 import { ChatRoom, ChatMessage } from '../types';
 import { useSocket } from './SocketContext';
+import { useAPIManager } from './APIManagerContext';
+import { SOCKET_EVENTS } from '../constants';
 
 interface ChatState {
   rooms: ChatRoom[];
@@ -139,47 +141,44 @@ interface ChatProviderProps {
 export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const { socket } = useSocket();
+  const { executeAPI } = useAPIManager();
 
   useEffect(() => {
     if (socket) {
-      // Listen for new messages
-      socket.on('message:new', (data: { roomId: string; message: ChatMessage }) => {
-        dispatch({ type: 'ADD_MESSAGE', payload: data });
+      // Listen for new messages - updated to match API documentation
+      socket.on(SOCKET_EVENTS.NEW_MESSAGE, (message: ChatMessage) => {
+        dispatch({ type: 'ADD_MESSAGE', payload: { roomId: message.roomId, message } });
       });
 
-      // Listen for user join/leave events
-      socket.on('room:user_joined', (data: { roomId: string; userId: string }) => {
-        dispatch({ type: 'USER_JOINED', payload: data });
+      // Listen for user join/leave events - updated to match API documentation
+      socket.on(SOCKET_EVENTS.USER_JOINED_ROOM, (data: { roomId: string; user: any }) => {
+        dispatch({ type: 'USER_JOINED', payload: { roomId: data.roomId, userId: data.user.id } });
       });
 
-      socket.on('room:user_left', (data: { roomId: string; userId: string }) => {
-        dispatch({ type: 'USER_LEFT', payload: data });
+      socket.on(SOCKET_EVENTS.USER_LEFT_ROOM, (data: { roomId: string; user: any }) => {
+        dispatch({ type: 'USER_LEFT', payload: { roomId: data.roomId, userId: data.user.id } });
       });
 
       return () => {
-        socket.off('message:new');
-        socket.off('room:user_joined');
-        socket.off('room:user_left');
+        socket.off(SOCKET_EVENTS.NEW_MESSAGE);
+        socket.off(SOCKET_EVENTS.USER_JOINED_ROOM);
+        socket.off(SOCKET_EVENTS.USER_LEFT_ROOM);
       };
     }
   }, [socket]);
 
-  let roomsLoading = false;
-  const loadRooms = async (retry = false) => {
-    if (state.loading || roomsLoading) return;
-    roomsLoading = true;
-    try {
-      dispatch({ type: 'SET_LOADING', payload: true });
-      const response = await chatAPI.getChatRooms();
-      const rooms = response?.rooms || [];
-      dispatch({ type: 'SET_ROOMS', payload: rooms });
-    } catch (error: any) {
-      const message = error?.response?.data?.message || error?.message || 'Failed to load chat rooms';
-      dispatch({ type: 'SET_ERROR', payload: message });
-      toast.error(message);
-      if (!retry) throw new Error(message);
-    } finally {
-      roomsLoading = false;
+  const loadRooms = async () => {
+    const response = await executeAPI(
+      'loadChatRooms',
+      () => chatAPI.getChatRooms(),
+      {
+        maxRetries: 3,
+        showToast: true,
+        preventDuplicates: true
+      }
+    );
+    if (response?.rooms) {
+      dispatch({ type: 'SET_ROOMS', payload: response.rooms });
     }
   };
 
@@ -255,7 +254,6 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
     }
   };
 
-
   const deleteChatRoom = async (roomId: string, retry = false) => {
     try {
       await chatAPI.deleteChatRoom(roomId);
@@ -297,3 +295,5 @@ export const ChatProvider: React.FC<ChatProviderProps> = ({ children }) => {
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>;
 };
+
+

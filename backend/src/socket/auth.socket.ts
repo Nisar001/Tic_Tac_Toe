@@ -18,6 +18,7 @@ export interface SocketAuthResult {
 
 export class SocketAuthManager {
   private authenticatedSockets: Map<string, AuthenticatedSocket> = new Map();
+  private userSessions: Map<string, Set<string>> = new Map(); // userId -> Set of socketIds
   private authAttempts: Map<string, { count: number; lastAttempt: Date }> = new Map();
   private ipAttempts: Map<string, { count: number; lastAttempt: Date }> = new Map();
 
@@ -25,6 +26,7 @@ export class SocketAuthManager {
   private static readonly MAX_AUTH_ATTEMPTS_PER_IP = 10;
   private static readonly MAX_AUTH_ATTEMPTS_PER_SOCKET = 5;
   private static readonly AUTH_ATTEMPT_WINDOW = 15 * 60 * 1000; // 15 min
+  private static readonly MAX_SESSIONS_PER_USER = 3; // Allow multiple tabs/devices
 
   /**
    * Validate token input
@@ -112,11 +114,22 @@ export class SocketAuthManager {
         username: (decoded as any).username || 'Unknown'
       };
 
-      const existing = this.getSocketByUserId(user.id);
-      if (existing && existing.id !== socket.id) {
-        existing.emit('auth_error', { message: 'Logged in elsewhere' });
-        existing.disconnect(true);
-        this.removeSocket(existing.id);
+      // Check if user already has too many sessions
+      const userSessions = this.userSessions.get(user.id) || new Set();
+      if (userSessions.size >= SocketAuthManager.MAX_SESSIONS_PER_USER) {
+        // Remove oldest session
+        const oldestSocketId = Array.from(userSessions)[0];
+        const oldestSocket = this.authenticatedSockets.get(oldestSocketId);
+        if (oldestSocket) {
+          oldestSocket.emit('auth_error', { message: 'Session limit exceeded' });
+          oldestSocket.disconnect(true);
+          this.removeSocket(oldestSocketId);
+        }
+      }
+
+      // Prevent duplicate authentication for same socket
+      if (this.authenticatedSockets.has(socket.id)) {
+        return { success: true, user: socket.user };
       }
 
       socket.user = user;
@@ -125,10 +138,18 @@ export class SocketAuthManager {
       socket.isRateLimited = false;
 
       this.authenticatedSockets.set(socket.id, socket);
+      
+      // Track user sessions
+      if (!this.userSessions.has(user.id)) {
+        this.userSessions.set(user.id, new Set());
+      }
+      this.userSessions.get(user.id)!.add(socket.id);
+      
       this.recordAuthAttempt(socket, true);
 
       socket.emit('auth_success', { message: 'Authenticated', user });
-      logInfo(`✅ Socket ${socket.id} authenticated user ${user.id}`);
+      socket.emit('authenticated'); // Emit authenticated event for frontend
+      logInfo(`✅ Socket ${socket.id} authenticated user ${user.username} (${user.id})`);
       return { success: true, user };
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
@@ -152,6 +173,17 @@ export class SocketAuthManager {
   }
 
   removeSocket(socketId: string): void {
+    const socket = this.authenticatedSockets.get(socketId);
+    if (socket?.user?.id) {
+      // Remove from user sessions
+      const userSessions = this.userSessions.get(socket.user.id);
+      if (userSessions) {
+        userSessions.delete(socketId);
+        if (userSessions.size === 0) {
+          this.userSessions.delete(socket.user.id);
+        }
+      }
+    }
     this.authenticatedSockets.delete(socketId);
   }
 

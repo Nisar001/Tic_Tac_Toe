@@ -156,24 +156,93 @@ export const getMatchmakingStatus = asyncHandler(async (req: AuthenticatedReques
 export const getQueueStats = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
   if (!req.user) throw createError.unauthorized('Authentication required');
 
-  const queueStats = MatchmakingManager.getQueueStats();
 
-  if (!socketManager) {
-    return res.json({
-      success: true,
-      data: { ...queueStats, connectedSockets: 0, authenticatedUsers: 0 }
-    });
-  }
 
-  const authManager = socketManager.getAuthManager();
-  res.json({
-    success: true,
-    data: {
-      ...queueStats,
-      connectedSockets: authManager.getOnlineUsersCount(),
-      authenticatedUsers: authManager.getOnlineUsersCount()
+  try {
+    // Get queue stats with error handling
+    const queueStats = MatchmakingManager.getQueueStats();
+
+    
+    // Validate the data structure
+    if (!queueStats || typeof queueStats !== 'object') {
+
+      throw new Error('Invalid queue stats data structure');
     }
-  });
+
+    // Ensure all values are serializable
+    const sanitizedStats = {
+      totalPlayers: Number(queueStats.totalPlayers) || 0,
+      averageWaitTime: Number(queueStats.averageWaitTime) || 0,
+      levelDistribution: queueStats.levelDistribution || {}
+    };
+
+
+
+    // Validate levelDistribution
+    if (typeof sanitizedStats.levelDistribution !== 'object') {
+      sanitizedStats.levelDistribution = {};
+    }
+
+    // Get socket connection info
+    let socketInfo = {
+      connectedSockets: 0,
+      authenticatedUsers: 0
+    };
+
+    if (socketManager) {
+      try {
+        const authManager = socketManager.getAuthManager();
+        const onlineCount = authManager.getOnlineUsersCount();
+        socketInfo = {
+          connectedSockets: Number(onlineCount) || 0,
+          authenticatedUsers: Number(onlineCount) || 0
+        };
+
+      } catch (socketError) {
+
+        // Continue with default values
+      }
+    }
+
+    const responseData = {
+      success: true,
+      data: {
+        ...sanitizedStats,
+        ...socketInfo,
+        timestamp: new Date().toISOString()
+      }
+    };
+
+
+
+    // Set cache headers to prevent 304 responses for real-time data
+    res.set({
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+
+    res.json(responseData);
+  } catch (error) {
+
+    
+    // Return safe fallback data
+    const fallbackData = {
+      success: true,
+      data: {
+        totalPlayers: 0,
+        averageWaitTime: 0,
+        levelDistribution: {},
+        connectedSockets: 0,
+        authenticatedUsers: 0,
+        timestamp: new Date().toISOString(),
+        error: 'Stats temporarily unavailable'
+      }
+    };
+
+
+    res.json(fallbackData);
+  }
 });
 
 export const forceMatch = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {

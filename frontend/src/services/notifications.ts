@@ -70,3 +70,5 @@ export const notificationsAPI = {
 };
 
 export default notificationsAPI;
+
+

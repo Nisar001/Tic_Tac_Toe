@@ -317,24 +317,45 @@ export class MatchmakingManager {
     averageWaitTime: number;
     levelDistribution: Record<number, number>;
   } {
-    const players = Array.from(this.queue.values());
-    const now = new Date();
+    try {
+      const players = Array.from(this.queue.values());
+      const now = new Date();
 
-    const totalPlayers = players.length;
-    const averageWaitTime = players.length > 0
-      ? players.reduce((sum, p) => sum + (now.getTime() - p.joinedAt.getTime()), 0) / players.length
-      : 0;
+      const totalPlayers = players.length;
+      
+      // Calculate average wait time safely
+      let averageWaitTime = 0;
+      if (players.length > 0) {
+        const totalWaitTime = players.reduce((sum, p) => {
+          const waitTime = now.getTime() - p.joinedAt.getTime();
+          return sum + (isNaN(waitTime) ? 0 : waitTime);
+        }, 0);
+        averageWaitTime = totalWaitTime / players.length;
+      }
 
-    const levelDistribution: Record<number, number> = {};
-    players.forEach(p => {
-      levelDistribution[p.level] = (levelDistribution[p.level] || 0) + 1;
-    });
+      // Build level distribution safely
+      const levelDistribution: Record<number, number> = {};
+      players.forEach(p => {
+        const level = Number(p.level) || 0;
+        if (isFinite(level)) {
+          levelDistribution[level] = (levelDistribution[level] || 0) + 1;
+        }
+      });
 
-    return {
-      totalPlayers,
-      averageWaitTime,
-      levelDistribution
-    };
+      // Ensure all values are finite numbers
+      return {
+        totalPlayers: isFinite(totalPlayers) ? totalPlayers : 0,
+        averageWaitTime: isFinite(averageWaitTime) ? Math.round(averageWaitTime) : 0,
+        levelDistribution
+      };
+    } catch (error) {
+
+      return {
+        totalPlayers: 0,
+        averageWaitTime: 0,
+        levelDistribution: {}
+      };
+    }
   }
 
   /**

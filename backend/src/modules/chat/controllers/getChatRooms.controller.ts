@@ -106,7 +106,7 @@ export const getChatRooms = asyncHandler(async (req: AuthenticatedRequest, res: 
     });
 
   } catch (error) {
-    console.error('Get chat rooms error:', error);
+
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve chat rooms'

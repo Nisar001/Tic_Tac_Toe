@@ -156,11 +156,13 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
                   </div>
                 </div>
 
-                {isHost && (typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id) !== currentUser.id && onKickPlayer && (
+                {isHost && game.players.player1 && (typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id) !== currentUser.id && onKickPlayer && (
                   <button
                     onClick={() => {
-                      const playerId = typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id;
-                      if (playerId) onKickPlayer(playerId);
+                      if (game.players.player1) {
+                        const playerId = typeof game.players.player1 === 'string' ? game.players.player1 : game.players.player1.id;
+                        if (playerId) onKickPlayer(playerId);
+                      }
                     }}
                     className="p-1 text-red-600 hover:bg-red-50 rounded"
                     title="Kick player"
@@ -312,3 +314,5 @@ export const GameLobby: React.FC<GameLobbyProps> = ({
 };
 
 export default GameLobby;
+
+

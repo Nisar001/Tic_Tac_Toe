@@ -156,7 +156,7 @@ export class ChatSocket {
       }
 
     } catch (err) {
-      console.error('Leave chat error:', err);
+
     }
   }
 

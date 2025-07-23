@@ -174,3 +174,5 @@ export const NotificationsList: React.FC = () => {
     </div>
   );
 };
+
+

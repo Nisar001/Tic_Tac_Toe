@@ -1,32 +1,60 @@
 
 import React, { useEffect, useState } from 'react';
 import { useGame } from '../contexts/GameContext';
-import { TrophyIcon, UserIcon } from '@heroicons/react/24/outline';
+import { useAPIManager } from '../contexts/APIManagerContext';
+import { TrophyIcon, UserIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 
 const Leaderboard: React.FC = () => {
   const { getLeaderboard, isLoading } = useGame();
+  const { loading, errors, retry } = useAPIManager();
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const loadLeaderboard = async () => {
-      try {
-        setError(null);
-        const data = await getLeaderboard();
-        setLeaderboard(data || []);
-      } catch (err: any) {
-        setError(err?.message || 'Failed to load leaderboard');
-      }
-    };
-    loadLeaderboard();
+  const loadLeaderboard = React.useCallback(async () => {
+    try {
+      setError(null);
+      const data = await getLeaderboard();
+      setLeaderboard(data || []);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load leaderboard');
+    }
   }, [getLeaderboard]);
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, [loadLeaderboard]);
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6 lg:space-y-8">
       <div className="text-center">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">Leaderboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-4 flex items-center justify-center gap-2">
+          Leaderboard
+          {(loading.getLeaderboard || isLoading) && (
+            <ArrowPathIcon className="w-6 h-6 animate-spin text-yellow-500" />
+          )}
+        </h1>
         <p className="text-gray-600 text-sm sm:text-base">See how you rank against other players</p>
       </div>
+
+      {/* API Manager Errors */}
+      {errors && Object.keys(errors).length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="space-y-2">
+            {Object.entries(errors).map(([apiCall, errorMsg]) => (
+              <div key={apiCall} className="flex items-center justify-between">
+                <span className="text-red-600">API Error ({apiCall}): {errorMsg}</span>
+                <button
+                  onClick={() => retry(apiCall, getLeaderboard)}
+                  className="flex items-center gap-1 px-2 py-1 text-xs text-red-600 hover:bg-red-100 rounded"
+                >
+                  <ArrowPathIcon className="w-3 h-3" />
+                  Retry
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center py-8">
@@ -34,8 +62,17 @@ const Leaderboard: React.FC = () => {
           <span className="text-gray-500 text-lg">Loading leaderboard...</span>
         </div>
       ) : error ? (
-        <div className="text-center text-red-600 py-8">
-          <p>{error}</p>
+        <div className="text-center py-8">
+          <div className="text-red-600 mb-4">
+            <p>{error}</p>
+          </div>
+          <button
+            onClick={loadLeaderboard}
+            className="flex items-center gap-2 mx-auto px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            <ArrowPathIcon className="w-4 h-4" />
+            Retry
+          </button>
         </div>
       ) : leaderboard.length === 0 ? (
         <div className="text-center py-8">
@@ -76,3 +113,5 @@ const Leaderboard: React.FC = () => {
 };
 
 export default Leaderboard;
+
+

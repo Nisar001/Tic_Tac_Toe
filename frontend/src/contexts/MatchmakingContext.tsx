@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
 import { matchmakingService, MatchmakingStatus, MatchmakingStats, MatchFound } from '../services/matchmaking';
 import { useSocket } from './SocketContext';
+import { useAPIManager } from './APIManagerContext';
 
 interface MatchmakingState {
   status: MatchmakingStatus | null;
@@ -189,3 +190,5 @@ export const MatchmakingProvider: React.FC<MatchmakingProviderProps> = ({ childr
 
   return <MatchmakingContext.Provider value={value}>{children}</MatchmakingContext.Provider>;
 };
+
+

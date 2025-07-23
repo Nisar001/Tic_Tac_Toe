@@ -28,3 +28,5 @@ export const getBackendUrl = () => {
 export const getSocketUrl = () => {
   return process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
 };
+
+

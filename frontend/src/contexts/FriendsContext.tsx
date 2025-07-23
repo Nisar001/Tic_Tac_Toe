@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, ReactNode, useState } from 'react';
 import toast from 'react-hot-toast';
 import friendsAPI from '../services/friends';
 import { Friend, FriendRequest } from '../types';
 import { useSocket } from './SocketContext';
+import { useAPIManager } from './APIManagerContext';
 
 interface FriendsState {
   friends: Friend[];
@@ -98,8 +99,6 @@ const friendsReducer = (state: FriendsState, action: FriendsAction): FriendsStat
   }
 };
 
-
-
 const FriendsContext = createContext<FriendsContextType | undefined>(undefined);
 
 export const useFriendsContext = () => {
@@ -110,7 +109,6 @@ export const useFriendsContext = () => {
   return context;
 };
 
-
 export interface FriendsContextType {
   state: FriendsState;
   loadFriends: (retry?: boolean) => Promise<void>;
@@ -120,11 +118,17 @@ export interface FriendsContextType {
   rejectFriendRequest: (requestId: string) => Promise<void>;
   removeFriend: (friendId: string) => Promise<void>;
   searchUsers: (query: string) => Promise<any[]>;
+  getAvailableUsers: (limit?: number, page?: number) => Promise<any[]>;
 }
 
 export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [state, dispatch] = useReducer(friendsReducer, initialState);
   const { socket } = useSocket();
+  const { executeAPI } = useAPIManager();
+  
+  // Loading flags to prevent multiple simultaneous requests
+  const [friendsLoading, setFriendsLoading] = useState(false);
+  const [friendRequestsLoading, setFriendRequestsLoading] = useState(false);
 
   useEffect(() => {
     if (socket) {
@@ -162,14 +166,23 @@ export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   }, [socket]);
 
-  // Load friends from new modular endpoint
-  let friendsLoading = false;
+  // Load friends using APIManager
   const loadFriends = async (retry = false) => {
     if (state.loading || friendsLoading) return;
-    friendsLoading = true;
+    setFriendsLoading(true);
+    
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
-      const users = await friendsAPI.getFriends();
+      
+      const users = await executeAPI(
+        'loadFriends',
+        () => friendsAPI.getFriends(),
+        {
+          showToast: false,
+          preventDuplicates: true
+        }
+      );
+
       if (users && Array.isArray(users)) {
         const friends: Friend[] = users.map(user => {
           const mappedUser = { ...user, id: user.id || user._id };
@@ -180,23 +193,22 @@ export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children })
             status: 'offline' as const,
           };
         });
+        
         dispatch({ type: 'SET_FRIENDS', payload: friends });
       }
     } catch (error: any) {
       const message = error?.response?.data?.message || error?.message || 'Failed to load friends';
       dispatch({ type: 'SET_ERROR', payload: message });
-      toast.error(message);
       if (!retry) throw new Error(message);
     } finally {
-      friendsLoading = false;
+      setFriendsLoading(false);
     }
   };
 
   // Load friend requests from new modular endpoint
-  let friendRequestsLoading = false;
   const loadFriendRequests = async (retry = false) => {
     if (state.loading || friendRequestsLoading) return;
-    friendRequestsLoading = true;
+    setFriendRequestsLoading(true);
     try {
       dispatch({ type: 'SET_LOADING', payload: true });
       const requests = await friendsAPI.getFriendRequests();
@@ -219,34 +231,50 @@ export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children })
       toast.error(message);
       if (!retry) throw new Error(message);
     } finally {
-      friendRequestsLoading = false;
+      setFriendRequestsLoading(false);
     }
   };
 
-  // Send friend request using new endpoint (receiverId)
+  // Send friend request using APIManager
   const sendFriendRequest = async (data: { receiverId: string; message?: string }) => {
     try {
-      const request = await friendsAPI.sendFriendRequest({ receiverId: data.receiverId, message: data.message });
+      const request = await executeAPI(
+        'sendFriendRequest',
+        () => friendsAPI.sendFriendRequest({ receiverId: data.receiverId, message: data.message }),
+        {
+          showToast: true,
+          preventDuplicates: true
+        }
+      );
+      
       if (request) {
         dispatch({ type: 'ADD_FRIEND_REQUEST', payload: { type: 'sent', request } });
+        toast.success('Friend request sent successfully!');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to send friend request';
       dispatch({ type: 'SET_ERROR', payload: message });
-      toast.error(message);
     }
   };
 
-  // Accept friend request using new endpoint
+  // Accept friend request using APIManager
   const acceptFriendRequest = async (requestId: string) => {
     try {
-      await friendsAPI.acceptFriendRequest(requestId);
+      await executeAPI(
+        `acceptFriendRequest_${requestId}`,
+        () => friendsAPI.acceptFriendRequest(requestId),
+        {
+          showToast: true,
+          preventDuplicates: true
+        }
+      );
+      
       dispatch({ type: 'REMOVE_FRIEND_REQUEST', payload: requestId });
+      toast.success('Friend request accepted!');
       // Friend will be added via socket event
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to accept friend request';
       dispatch({ type: 'SET_ERROR', payload: message });
-      toast.error(message);
     }
   };
 
@@ -287,6 +315,22 @@ export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children })
     }
   };
 
+  // Get available users (not friends, not blocked)
+  const getAvailableUsers = async (limit = 50, page = 1) => {
+    try {
+      
+      const users = await friendsAPI.getAvailableUsers(limit, page);
+      
+      return users || [];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to get available users';
+      console.error('❌ Failed to get available users:', message);
+      dispatch({ type: 'SET_ERROR', payload: message });
+      toast.error(message);
+      return [];
+    }
+  };
+
   const value: FriendsContextType = {
     state,
     loadFriends,
@@ -296,7 +340,10 @@ export const FriendsProvider: React.FC<{ children: ReactNode }> = ({ children })
     rejectFriendRequest,
     removeFriend,
     searchUsers,
+    getAvailableUsers,
   };
 
   return <FriendsContext.Provider value={value}>{children}</FriendsContext.Provider>;
 };
+
+

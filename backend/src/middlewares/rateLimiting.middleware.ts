@@ -232,3 +232,21 @@ export const blockUserRateLimit = rateLimit({
     'Too many block/unblock actions, please try again later'
   )
 });
+
+/**
+ * Chat room creation rate limiter
+ */
+export const roomCreationRateLimit = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: process.env.NODE_ENV === 'development' ? 20 : 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: createMessage(
+    'Too many room creation attempts, please wait before creating another room',
+    10
+  ),
+  handler: rateLimitHandler(
+    10,
+    'Too many room creation attempts, please wait before creating another room'
+  )
+});

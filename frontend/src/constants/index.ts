@@ -1,6 +1,6 @@
 // API Configuration
-export const API_BASE_URL = process.env.REACT_APP_API_URL || '';
-export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || '';
+export const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+export const SOCKET_URL = process.env.REACT_APP_SOCKET_URL || 'http://localhost:5000';
 
 // App Configuration
 export const APP_NAME = process.env.REACT_APP_APP_NAME || 'Tic Tac Toe';
@@ -16,32 +16,47 @@ export const SOCIAL_AUTH = {
   }
 };
 
-// Socket Events
+// Socket Events - Updated to match API documentation
 export const SOCKET_EVENTS = {
   // Connection
   CONNECT: 'connect',
   DISCONNECT: 'disconnect',
   
-  // Game Events
-  GAME_CREATED: 'gameCreated',
-  GAME_JOINED: 'gameJoined',
-  GAME_MOVE: 'gameMove',
-  GAME_ENDED: 'gameEnded',
-  GAME_STATE_UPDATE: 'gameStateUpdate',
+  // Game Events - Emit
+  JOIN_GAME: 'joinGame',
+  MAKE_MOVE: 'makeMove',
+  
+  // Game Events - Listen
+  GAME_UPDATE: 'gameUpdate',
+  MOVE_RESULT: 'moveResult',
+  GAME_OVER: 'gameOver',
   PLAYER_JOINED: 'playerJoined',
   PLAYER_LEFT: 'playerLeft',
   
-  // Matchmaking Events
-  QUEUE_JOINED: 'queueJoined',
-  QUEUE_LEFT: 'queueLeft',
-  MATCH_FOUND: 'matchFound',
-  QUEUE_STATUS: 'queueStatus',
+  // Chat Events - Emit
+  JOIN_CHAT_ROOM: 'joinChatRoom',
+  SEND_MESSAGE: 'sendMessage',
   
-  // Chat Events
-  MESSAGE_RECEIVED: 'messageReceived',
-  MESSAGE_SENT: 'messageSent',
-  USER_TYPING: 'userTyping',
-  USER_STOPPED_TYPING: 'userStoppedTyping',
+  // Chat Events - Listen
+  NEW_MESSAGE: 'newMessage',
+  USER_JOINED_ROOM: 'userJoinedRoom',
+  USER_LEFT_ROOM: 'userLeftRoom',
+  
+  // Matchmaking Events - Emit
+  FIND_MATCH: 'findMatch',
+  
+  // Matchmaking Events - Listen
+  MATCH_FOUND: 'matchFound',
+  MATCHMAKING_UPDATE: 'matchmakingUpdate',
+  
+  // Friend Events - Listen
+  FRIEND_REQUEST: 'friendRequest',
+  FRIEND_ONLINE: 'friendOnline',
+  FRIEND_OFFLINE: 'friendOffline',
+  GAME_INVITE: 'gameInvite',
+  
+  // Notification Events - Listen
+  NOTIFICATION: 'notification',
   
   // Error Events
   ERROR: 'error',
@@ -159,3 +174,5 @@ export const THEME = {
   WARNING_COLOR: '#f59e0b',
   ERROR_COLOR: '#ef4444',
 } as const;
+
+

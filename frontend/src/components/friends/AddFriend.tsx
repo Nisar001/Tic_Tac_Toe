@@ -3,7 +3,7 @@ import { useFriendsContext } from '../../contexts/FriendsContext';
 import { FaUserPlus, FaSearch, FaEnvelope, FaUser } from 'react-icons/fa';
 
 export const AddFriend: React.FC = () => {
-  const { searchUsers, sendFriendRequest } = useFriendsContext();
+  const { searchUsers, sendFriendRequest, getAvailableUsers } = useFriendsContext();
   const [searchType, setSearchType] = useState<'email' | 'username'>('username');
   const [searchQuery, setSearchQuery] = useState('');
   const [message, setMessage] = useState('');
@@ -18,18 +18,16 @@ export const AddFriend: React.FC = () => {
     if (!searchQuery) {
       setLoadingAll(true);
       setAllUsersError(null);
-      import('../../services/friends').then(({ friendsAPI }) => {
-        friendsAPI.getFriends().then((users: any[]) => {
-          setAllUsers(users || []);
-          setLoadingAll(false);
-        }).catch((err: any) => {
-          setAllUsers([]);
-          setAllUsersError('Failed to load users. Please try again.');
-          setLoadingAll(false);
-        });
+      getAvailableUsers(50, 1).then((users: any[]) => {
+        setAllUsers(users || []);
+        setLoadingAll(false);
+      }).catch((err: any) => {
+        setAllUsers([]);
+        setAllUsersError('Failed to load users. Please try again.');
+        setLoadingAll(false);
       });
     }
-  }, [searchQuery]);
+  }, [searchQuery, getAvailableUsers]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -224,3 +222,5 @@ export const AddFriend: React.FC = () => {
     </div>
   );
 };
+
+

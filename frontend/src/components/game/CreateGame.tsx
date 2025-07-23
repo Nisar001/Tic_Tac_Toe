@@ -11,11 +11,9 @@ const CreateGame: React.FC = () => {
   const { createGame, isLoading } = useGame();
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [formData, setFormData] = useState<CreateGameRequest>({
-    gameConfig: {
-      gameMode: 'classic',
-      isPrivate: false,
-      timeLimit: 300, // 5 minutes
-    }
+    gameMode: 'classic',
+    isPrivate: false,
+    timeLimit: 300, // 5 minutes
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -29,12 +27,10 @@ const CreateGame: React.FC = () => {
       toast.error(error.message || 'Failed to create game');
     }
   };
-  const handleInputChange = (field: keyof CreateGameRequest['gameConfig'], value: any) => {
-    setFormData(prev => ({ 
-      gameConfig: { 
-        ...prev.gameConfig, 
-        [field]: value 
-      } 
+  const handleInputChange = (field: keyof CreateGameRequest, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
     }));
   };
 
@@ -61,7 +57,7 @@ const CreateGame: React.FC = () => {
                 type="button"
                 onClick={() => handleInputChange('gameMode', type.value)}
                 className={`p-4 text-left border-2 rounded-lg transition-colors ${
-                  formData.gameConfig.gameMode === type.value
+                  formData.gameMode === type.value
                     ? 'border-blue-500 bg-blue-50'
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
@@ -93,7 +89,7 @@ const CreateGame: React.FC = () => {
               <input
                 type="checkbox"
                 id="isPrivate"
-                checked={formData.gameConfig.isPrivate || false}
+                checked={formData.isPrivate || false}
                 onChange={(e) => handleInputChange('isPrivate', e.target.checked)}
                 className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
@@ -112,7 +108,7 @@ const CreateGame: React.FC = () => {
                 min="60"
                 max="3600"
                 step="60"
-                value={formData.gameConfig.timeLimit || 300}
+                value={formData.timeLimit || 300}
                 onChange={(e) => handleInputChange('timeLimit', parseInt(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
               />
@@ -144,3 +140,5 @@ const CreateGame: React.FC = () => {
 };
 
 export default CreateGame;
+
+

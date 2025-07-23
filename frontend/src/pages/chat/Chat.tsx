@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useChatContext } from '../../contexts/ChatContext';
+import { useAPIManager } from '../../contexts/APIManagerContext';
 import { ChatRoom } from './ChatRoom';
 import { ChatRoomList } from '../../components/chat/ChatRoomList';
 import CreateChatRoom from '../../components/chat/CreateChatRoom';
-import { FaComments, FaUsers, FaSearch } from 'react-icons/fa';
+import { FaComments, FaUsers, FaSearch, FaSync } from 'react-icons/fa';
 
 export const Chat: React.FC = () => {
   const { state, loadRooms, setActiveRoom } = useChatContext();
+  const { loading, errors, retry } = useAPIManager();
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
@@ -32,11 +34,41 @@ export const Chat: React.FC = () => {
               <FaComments className="mr-2 text-blue-600" />
               Chat Rooms
             </h2>
-            <div className="flex items-center text-sm text-gray-600">
-              <FaUsers className="mr-1" />
-              {state.rooms.length}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center text-sm text-gray-600">
+                <FaUsers className="mr-1" />
+                {state.rooms.length}
+              </div>
+              {loading.loadRooms && (
+                <div className="flex items-center text-sm text-gray-500">
+                  <FaSync className="animate-spin mr-1" />
+                </div>
+              )}
+              <button
+                onClick={loadRooms}
+                className="p-1 text-gray-600 hover:text-blue-600 transition-colors"
+                disabled={loading.loadRooms}
+                title="Refresh rooms"
+              >
+                <FaSync className={loading.loadRooms ? 'animate-spin' : ''} />
+              </button>
             </div>
           </div>
+          {errors && Object.keys(errors).length > 0 && (
+            <div className="mb-2 p-2 bg-red-50 border border-red-200 rounded text-sm">
+              {Object.entries(errors).map(([apiCall, error]) => (
+                <div key={apiCall} className="flex items-center justify-between">
+                  <span className="text-red-600">Error ({apiCall}): {error}</span>
+                  <button
+                    onClick={() => retry(apiCall, loadRooms)}
+                    className="ml-2 px-2 py-1 text-xs text-red-600 hover:bg-red-100 rounded"
+                  >
+                    Retry
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Search */}
           <div className="relative mb-2">
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -100,3 +132,5 @@ export const Chat: React.FC = () => {
     </div>
   );
 };
+
+

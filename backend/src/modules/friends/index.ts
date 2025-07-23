@@ -1,4 +1,7 @@
-// export { default as friendRoutes } from './routes/friend.routes';
-export { default as requestRoutes } from './routes/request.routes';
-export { default as blockRoutes } from './routes/block.routes';
-export { default as userRoutes } from './routes/user.routes';
+/**
+ * Friends Module Index
+ * Exports the unified friends functionality
+ */
+
+export { default as friendsRoutes } from './routes/friends.unified';
+export * from './controllers/friends.unified';

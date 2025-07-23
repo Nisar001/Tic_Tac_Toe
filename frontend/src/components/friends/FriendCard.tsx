@@ -125,3 +125,5 @@ export const FriendCard: React.FC<FriendCardProps> = ({
     </div>
   );
 };
+
+

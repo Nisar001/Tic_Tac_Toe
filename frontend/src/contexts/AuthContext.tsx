@@ -5,6 +5,7 @@ import { STORAGE_KEYS } from '../constants';
 import {
   AuthContextType,
   User,
+  UserStats,
   AuthTokens,
   LoginCredentials,
   RegisterCredentials,
@@ -430,6 +431,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     dispatch({ type: 'CLEAR_AUTH' });
   };
 
+  const updateUserStats = (newStats: Partial<UserStats>) => {
+    if (state.user) {
+      const updatedUser = {
+        ...state.user,
+        stats: {
+          ...state.user.stats,
+          ...newStats,
+        },
+      };
+      
+      // Update localStorage
+      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(updatedUser));
+      
+      // Update state
+      dispatch({ type: 'UPDATE_USER', payload: { stats: updatedUser.stats } });
+    }
+  };
+
   const value: AuthContextType = {
     user: state.user,
     tokens: state.tokens,
@@ -441,6 +460,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     refreshToken,
     refreshUser,
     updateProfile,
+    updateUserStats,
     changePassword,
     verifyEmail,
     resendVerification,
@@ -458,3 +478,5 @@ export const useAuth = (): AuthContextType => {
   }
   return context;
 };
+
+

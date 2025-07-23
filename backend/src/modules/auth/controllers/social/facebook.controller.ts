@@ -98,7 +98,8 @@ export const facebookLogin = asyncHandler(async (req: Request, res: Response, ne
         try {
           accessToken = AuthUtils.generateAccessToken({
             userId: user._id,
-            email: user.email
+            email: user.email,
+            tokenType: 'access'
           });
 
           refreshToken = AuthUtils.generateRefreshToken({
@@ -229,7 +230,8 @@ export const facebookCallback = asyncHandler(async (req: Request, res: Response,
         try {
           accessToken = AuthUtils.generateAccessToken({
             userId: user._id,
-            email: user.email
+            email: user.email,
+            tokenType: 'access'
           });
 
           refreshToken = AuthUtils.generateRefreshToken({

@@ -97,3 +97,5 @@ export const FriendRequestCard: React.FC<FriendRequestCardProps> = ({
     </div>
   );
 };
+
+

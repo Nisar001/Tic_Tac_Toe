@@ -74,7 +74,7 @@ export const resendVerification = asyncHandler(async (req: Request, res: Respons
     try {
       await EmailService.sendVerificationEmail(sanitizedEmail, verificationCode);
     } catch (emailErr) {
-      console.error('Verification email failed:', emailErr);
+
 
       // Reset fields if email fails
       user.emailVerificationToken = undefined;
@@ -101,7 +101,7 @@ export const resendVerification = asyncHandler(async (req: Request, res: Respons
       throw err;
     }
 
-    console.error('Resend verification error:', err);
+
     throw createError.internal('Verification email process failed');
   }
 });

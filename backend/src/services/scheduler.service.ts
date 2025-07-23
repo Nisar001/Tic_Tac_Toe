@@ -27,7 +27,7 @@ export class SchedulerService {
 
   static initialize(): void {
     if (this.isInitialized) {
-      console.warn('Scheduler service already initialized');
+
       return;
     }
 
@@ -40,9 +40,9 @@ export class SchedulerService {
       this.startSecurityMonitoring();
 
       this.isInitialized = true;
-      console.log('📅 Enhanced Scheduler service initialized with monitoring');
+
     } catch (error) {
-      console.error('Failed to initialize scheduler service:', error);
+
       throw error;
     }
   }
@@ -73,7 +73,7 @@ export class SchedulerService {
   private static async executeJobWithMonitoring(jobName: string, jobFunction: () => Promise<void>): Promise<void> {
     const stats = this.jobStats.get(jobName);
     if (!stats) {
-      console.warn(`Job stats not initialized for: ${jobName}`);
+
       return;
     }
 
@@ -90,9 +90,9 @@ export class SchedulerService {
 
     } catch (error) {
       stats.errorCount++;
-      console.error(`Job ${jobName} failed:`, error);
+
       if (stats.errorCount > 5) {
-        console.error(`ALERT: Job ${jobName} has failed ${stats.errorCount} times`);
+
       }
     } finally {
       stats.isRunning = false;
@@ -111,7 +111,7 @@ export class SchedulerService {
     jobs.forEach(({ job, name }) => {
       if (job) {
         job.stop();
-        console.log(`Stopped ${name} job`);
+
       }
     });
 
@@ -122,7 +122,7 @@ export class SchedulerService {
     this.securityJob = null;
     this.isInitialized = false;
 
-    console.log('📅 Enhanced Scheduler service stopped');
+
   }
 
   private static startLivesRegeneration(): void {
@@ -132,21 +132,21 @@ export class SchedulerService {
       scheduled: true,
       timezone: "UTC"
     });
-    console.log('❤️ Lives regeneration job started');
+
   }
 
   private static startDatabaseCleanup(): void {
     this.cleanupJob = cron.schedule('0 2 * * *', async () => {
       await this.executeJobWithMonitoring('databaseCleanup', () => this.performDatabaseCleanup());
     });
-    console.log('🧹 Database cleanup job started');
+
   }
 
   private static startStatsCalculation(): void {
     this.statsJob = cron.schedule('0 */6 * * *', async () => {
       await this.executeJobWithMonitoring('statsCalculation', () => this.calculateGlobalStats());
     });
-    console.log('📊 Stats calculation job started');
+
   }
 
   private static startNotificationSystem(): void {
@@ -156,7 +156,7 @@ export class SchedulerService {
       scheduled: true,
       timezone: "UTC"
     });
-    console.log('📧 Notification system job started');
+
   }
 
   private static startSecurityMonitoring(): void {
@@ -166,7 +166,7 @@ export class SchedulerService {
       scheduled: true,
       timezone: "UTC"
     });
-    console.log('🔒 Security monitoring job started');
+
   }
 
   private static async processLivesRegeneration(): Promise<void> {
@@ -208,11 +208,11 @@ export class SchedulerService {
     try {
       await this.sendLivesNotifications(notificationsToSend);
     } catch (error) {
-      console.error('Failed to send lives notifications:', error);
+
     }
 
     if (updatedCount > 0) {
-      console.log(`❤️ Regenerated lives for ${updatedCount} users`);
+
     }
   }
 
@@ -234,7 +234,7 @@ export class SchedulerService {
           text: `Your lives have been recharged! Current Lives: ${notification.lives}/5. Ready to play again!`
         });
       } catch (error) {
-        console.error(`Failed to send lives notification to ${notification.email}:`, error);
+
       }
     }
   }
@@ -246,7 +246,7 @@ export class SchedulerService {
     await User.updateMany({ passwordResetTokenExpiry: { $lt: new Date() } }, { $unset: { passwordResetToken: 1, passwordResetTokenExpiry: 1 } });
     await User.updateMany({ emailVerificationExpiry: { $lt: new Date() } }, { $unset: { emailVerificationToken: 1, emailVerificationExpiry: 1 } });
 
-    console.log('🧹 Database cleanup completed');
+
   }
 
   private static async calculateGlobalStats(): Promise<void> {
@@ -259,14 +259,7 @@ export class SchedulerService {
       { $group: { _id: null, avgLevel: { $avg: '$level' }, maxLevel: { $max: '$level' } } }
     ]);
 
-    console.log(`📊 Global stats calculated:`, {
-      totalUsers,
-      activeUsers,
-      verifiedUsers,
-      averageLevel: levelStats[0]?.avgLevel || 0,
-      maxLevel: levelStats[0]?.maxLevel || 1,
-      timestamp: new Date()
-    });
+    // Global stats calculated successfully
   }
 
   private static async processNotifications(): Promise<void> {
@@ -277,14 +270,14 @@ export class SchedulerService {
 
     for (const user of usersWithFullLives) {
       try {
-        console.log(`Sending lives notification to user ${user.username}`);
+
         await User.findByIdAndUpdate(user._id, { lastLivesNotification: new Date() });
       } catch (notificationError) {
-        console.error(`Failed to send notification to user ${user._id}:`, notificationError);
+
       }
     }
 
-    console.log(`Processed notifications for ${usersWithFullLives.length} users`);
+
   }
 
   private static async performSecurityCheck(): Promise<void> {
@@ -294,14 +287,14 @@ export class SchedulerService {
     });
 
     for (const user of suspiciousUsers) {
-      console.warn(`Security alert: User ${user.username} has ${user.failedLoginAttempts} failed login attempts`);
+
 
       if ((user.failedLoginAttempts ?? 0) >= 10) {
         await User.findByIdAndUpdate(user._id, {
           isLocked: true,
           lockedUntil: new Date(Date.now() + 24 * 60 * 60 * 1000)
         });
-        console.warn(`Account locked for user ${user.username}`);
+
       }
     }
 
@@ -310,7 +303,7 @@ export class SchedulerService {
       status: 'completed'
     }).populate('players.player1 players.player2');
 
-    console.log('Security monitoring completed');
+
   }
 
   static async regenerateUserLives(userId: string): Promise<boolean> {
@@ -329,7 +322,7 @@ export class SchedulerService {
 
       return false;
     } catch (error) {
-      console.error('Manual lives regeneration failed:', error);
+
       return false;
     }
   }

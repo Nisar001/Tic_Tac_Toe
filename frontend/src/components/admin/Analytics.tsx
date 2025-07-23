@@ -244,3 +244,5 @@ export const Analytics: React.FC<AnalyticsProps> = ({ stats, isLoading = false }
 };
 
 export default Analytics;
+
+
